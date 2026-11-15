@@ -76,7 +76,7 @@ function frameView() {
   const dist = span * (portrait ? 2.5 : 1.15);
 
   homeTarget.set(center.x, groundY, center.z);
-  homePos.set(center.x - dist * 0.35, groundY + dist * 0.55, center.z + dist * 0.75);
+  homePos.set(center.x - dist * 0.22, groundY + dist * 0.55, center.z + dist * 0.75);
 
   controls.minDistance = 3;
   controls.maxDistance = span * 4;
