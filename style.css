@@ -1,0 +1,66 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #b9d4e8;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* let OrbitControls handle all gestures */
+  outline: none;
+}
+
+#status, #hint {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(30, 24, 18, 0.72);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.3;
+  text-align: center;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+
+#status { top: calc(12px + env(safe-area-inset-top)); }
+#hint   { bottom: calc(18px + env(safe-area-inset-bottom)); }
+
+.hidden { opacity: 0; }
+
+/* Show the hint that matches the input device */
+#hint .mouse { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  #hint .touch { display: none; }
+  #hint .mouse { display: inline; }
+}
+
+#reset {
+  position: fixed;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(30, 24, 18, 0.72);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#reset:active { background: rgba(30, 24, 18, 0.9); }

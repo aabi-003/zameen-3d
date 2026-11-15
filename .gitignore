@@ -1,0 +1,16 @@
+# Source/reference videos are too large for GitHub (282 MB) - never commit them
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.m4v
+*.3gp
+/reference/
+
+# Blender backup files
+*.blend1
+*.blend2
+
+node_modules/
+.DS_Store
