@@ -17,20 +17,31 @@ touch.
 Camera movement is smooth (damped), the camera cannot go below the ground,
 and the view cannot be dragged away from the land.
 
+## What it shows
+
+- **Ground:** 127 m x 127 m of flat dry soil, with uneven colour like the
+  real land.
+- **Right side** (seen from the entrance): a block wall along the full side,
+  2 m high and 0.4 m thick.
+- **Other three sides:** grey concrete pillars (1.8 m high, 15 cm square, one
+  about every 3 m) joined by 3 lines of metal wire.
+- Sunlight with soft shadows and a simple sky.
+
+The land is built in code in `main.js` (no model file). Colours and the look
+of the soil, wall and pillars follow the photos in `reference-photos/`. Sizes
+are constants at the top of `main.js`.
+
 ## Project status
 
-- **Phase 1 - done:** PWA skeleton and Three.js viewer. Until the real model
-  exists, a flat soil-coloured placeholder ground (with a faint 10 m grid) is
-  shown.
-- **Phase 2 - not started:** Model the land in Blender and export it to
-  `models/zameen.glb` (under 5 MB). Flat plain soil; mud wall on the right
-  side (seen from the entrance); concrete pillars with 3 lines of wire on the
-  other three sides.
+- **Phase 1 - done:** PWA skeleton and Three.js viewer.
+- **Phase 2 - done:** The land, wall and fence, built in Three.js code
+  instead of Blender.
 - **Phase 3 - later:** Placeable objects on the land (pool, pit, plants, crop
   field).
 
-When `models/zameen.glb` is added, the viewer loads it automatically and
-removes the placeholder. No code change is needed.
+The GLB loader is still in `main.js` for later use. It is switched off by
+`USE_GLB_MODEL = false`; set it to `true` and add `models/zameen.glb` to show
+a Blender model instead of the built-in land.
 
 ## Files
 
@@ -41,7 +52,8 @@ main.js                3D viewer (Three.js + OrbitControls + GLTFLoader)
 sw.js                  Service worker (offline support)
 manifest.webmanifest   PWA manifest (name, icons, colours)
 icons/                 App icons
-models/                zameen.glb goes here (Phase 2)
+models/                Optional zameen.glb (see USE_GLB_MODEL)
+reference-photos/      Photos of the real land (frames from the video)
 vendor/three/          Three.js r170, stored locally so the app works offline
 ```
 
@@ -56,15 +68,19 @@ web server, not by double-clicking `index.html`:
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000>. To install on a phone, host the folder on
-any HTTPS static host (for example GitHub Pages), open it in Chrome and choose
-"Add to Home screen".
+Then open <http://localhost:8000>.
+
+The live version is on GitHub Pages (served from branch `phone-3d`):
+<https://aabi-003.github.io/zameen-3d/>. On a phone, open it in Chrome and
+choose "Add to Home screen" to install it.
 
 ## Performance notes (mid-range Android)
 
 - Renders only when the camera moves, not continuously (saves battery).
-- Pixel ratio capped at 2.
-- Two lights, no shadows, simple materials.
+- Pixel ratio capped at 2, and lowered automatically if the phone is slow.
+- The shadow map is drawn once and reused, because nothing in the scene moves.
+- All pillars are one draw call, all wires another; textures are made in
+  code, so there is nothing extra to download.
 
 ## Rules for this repo
 
