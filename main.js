@@ -400,16 +400,16 @@ function clampView() {
   t.set(x, groundY, z);
 }
 
-// Default view: low, from the entrance corner next to the wall, looking in.
-// The wall runs away on the right; the fence is in front and on the far sides.
+// Default view: standing in the entrance gate (middle of the front), low,
+// looking straight in. The wall is on the right, the fence on the other sides.
 function homeView() {
   const portrait = camera.aspect < 1;
   if (portrait) {
-    camera.position.set(HALF - 8, 5.5, HALF + 10);
-    controls.target.set(HALF - 6, 0, HALF - 20);
+    camera.position.set(0, 5, HALF + 4);
+    controls.target.set(0, 0, HALF - 26);
   } else {
-    camera.position.set(HALF - 10, 4, HALF + 5);
-    controls.target.set(HALF - 14, 0, HALF - 24);
+    camera.position.set(0, 4.5, HALF + 9);
+    controls.target.set(0, 0, HALF - 30);
   }
   controls.update();
   requestRender();
