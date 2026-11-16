@@ -13,6 +13,7 @@ const PILLAR_HEIGHT = 1.8;      // fence on the other three sides
 const PILLAR_SIZE = 0.15;
 const PILLAR_SPACING = 3;       // target gap; adjusted slightly to fit the side exactly
 const WIRE_HEIGHTS = [0.5, 1.0, 1.5];
+const GATE_PILLARS = 3;         // pillars left out in the middle of the front = entrance gate
 const WIRE_THICKNESS = 0.015;   // thicker than real wire so it stays visible on a phone
 
 // The land is built in code below. Set this to true (and add the file) to
@@ -303,8 +304,14 @@ function makeFence() {
   const gaps = Math.round(PLOT_SIZE / PILLAR_SPACING);
   const step = PLOT_SIZE / gaps;                        // ~3.02 m
   const spots = [];
+  // Entrance gate: GATE_PILLARS pillars are left out in the middle of the front.
+  const gateFirst = Math.round(gaps / 2) - Math.floor(GATE_PILLARS / 2);
+  const gateLast = gateFirst + GATE_PILLARS - 1;
+  const gateLeftX = -HALF + (gateFirst - 1) * step;     // last pillar before the gate
+  const gateRightX = -HALF + (gateLast + 1) * step;     // first pillar after the gate
   for (let i = 0; i < gaps; i++) {                      // front and back; the wall closes the right end
-    spots.push([-HALF + i * step, HALF], [-HALF + i * step, -HALF]);
+    if (i < gateFirst || i > gateLast) spots.push([-HALF + i * step, HALF]);
+    spots.push([-HALF + i * step, -HALF]);
   }
   for (let i = 1; i < gaps; i++) spots.push([-HALF, -HALF + i * step]);   // left side
 
@@ -321,12 +328,13 @@ function makeFence() {
   pillars.name = 'pillars';
   group.add(pillars);
 
-  // Each wire is one long thin bar per side (9 bars in total, drawn in one call).
+  // Each wire is one long thin bar per stretch (all drawn in one call).
   const wireEndX = HALF - WALL_THICKNESS;               // wires stop at the wall
-  const frontLen = wireEndX + HALF;
+  const alongX = (x0, x1, z) => ({ x: (x0 + x1) / 2, z, sx: x1 - x0, sz: WIRE_THICKNESS });
   const runs = [
-    { x: (wireEndX - HALF) / 2, z: HALF, sx: frontLen, sz: WIRE_THICKNESS },
-    { x: (wireEndX - HALF) / 2, z: -HALF, sx: frontLen, sz: WIRE_THICKNESS },
+    alongX(-HALF, gateLeftX, HALF),                     // front, left of the gate
+    alongX(gateRightX, wireEndX, HALF),                 // front, right of the gate
+    alongX(-HALF, wireEndX, -HALF),                     // back
     { x: -HALF, z: 0, sx: WIRE_THICKNESS, sz: PLOT_SIZE },
   ];
   const wires = new THREE.InstancedMesh(

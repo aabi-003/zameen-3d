@@ -16,7 +16,9 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
 - The entrance/front is the +Z side; the wall is on +X. Ground surface is at
   height 0, plot centre at the origin. Parts are named `ground`, `wall`,
   `fence`, `pillars`, `wires` inside the `land` group.
-- The fence is continuous; there is no gate gap (none was asked for).
+- Entrance gate: 3 pillars are left out in the middle of the front side
+  (`GATE_PILLARS`), an opening about 12 m wide with no wire across it.
+- Phase 3 is on hold: the owner wants to think and discuss it first.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.

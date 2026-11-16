@@ -24,7 +24,8 @@ and the view cannot be dragged away from the land.
 - **Right side** (seen from the entrance): a block wall along the full side,
   2 m high and 0.4 m thick.
 - **Other three sides:** grey concrete pillars (1.8 m high, 15 cm square, one
-  about every 3 m) joined by 3 lines of metal wire.
+  about every 3 m) joined by 3 lines of metal wire. Three pillars are left
+  out in the middle of the front to make the entrance gate (about 12 m wide).
 - Sunlight with soft shadows and a simple sky.
 
 The land is built in code in `main.js` (no model file). Colours and the look
