@@ -54,7 +54,7 @@ const maxAniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(SKY_HORIZON);
-scene.fog = new THREE.Fog(SKY_HORIZON, 300, 1500);   // far ground fades into the sky
+scene.fog = new THREE.Fog(SKY_HORIZON, 600, 2600);   // far ground fades into the sky
 
 const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 4000);
 
@@ -400,16 +400,25 @@ function clampView() {
   t.set(x, groundY, z);
 }
 
-// Default view: standing in the entrance gate (middle of the front), low,
-// looking straight in. The wall is on the right, the fence on the other sides.
+// Default view: "top-front". The camera is in front of the gate and raised,
+// looking down at the land at a medium angle (not straight down, not flat).
+// It backs away just far enough for the whole plot, gate included, to fit
+// the screen, so it works on both tall and wide screens.
+const HOME_TILT_DEG = 35;       // 0 = flat from the front, 90 = straight down
 function homeView() {
-  const portrait = camera.aspect < 1;
-  if (portrait) {
-    camera.position.set(0, 5, HALF + 4);
-    controls.target.set(0, 0, HALF - 26);
-  } else {
-    camera.position.set(0, 4.5, HALF + 9);
-    controls.target.set(0, 0, HALF - 30);
+  const tilt = THREE.MathUtils.degToRad(HOME_TILT_DEG);
+  const corners = [[-HALF, HALF], [HALF, HALF], [-HALF, -HALF], [HALF, -HALF]];
+  const v = new THREE.Vector3();
+  controls.target.set(0, 0, 0);
+  for (let dist = 60; dist <= controls.maxDistance; dist += 4) {
+    camera.position.set(0, Math.sin(tilt) * dist, Math.cos(tilt) * dist);
+    camera.lookAt(controls.target);
+    camera.updateMatrixWorld();
+    const fits = corners.every(([x, z]) => {
+      v.set(x, 0, z).project(camera);
+      return Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.85;
+    });
+    if (fits) break;
   }
   controls.update();
   requestRender();

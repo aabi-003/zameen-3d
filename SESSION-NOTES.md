@@ -18,7 +18,8 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
   `fence`, `pillars`, `wires` inside the `land` group.
 - Entrance gate: 3 pillars are left out in the middle of the front side
   (`GATE_PILLARS`), an opening about 12 m wide with no wire across it.
-- Default camera (and the reset button): at the gate, looking straight in.
+- Default camera (and the reset button): "top-front" view from the gate side,
+  tilted 35 degrees down (`HOME_TILT_DEG`), backed off until the whole plot fits.
 - Phase 3 is on hold: the owner wants to think and discuss it first.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
