@@ -23,8 +23,13 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
 - **Phase 3 is done (2026-11-21):** orchard plants (instanced, types in
   `plants.js`), 2 pools + khet in the right half (area 2 : 1.5 : 0.5),
   tap-to-select / hold-to-drag, 5 ft / 10 ft rules with red cross + beep,
-  layout saved in localStorage (`zameen3d-layout-v1`). Not yet confirmed by
-  the owner on the phone.
+  layout saved in localStorage (`zameen3d-layout-v1`, now version 2).
+- **2026-11-21 changes:** pools one after another (big pool at the front,
+  then small pool, then khet), kamra + 2 solar panels on a stand as one
+  draggable object at the back-right, gate moved one pillar toward the baag
+  side (`GATE_SHIFT = -1`; owner said "add a pillar on the water side, remove
+  one on the baag side"). Old v1 layouts keep their plants; pools/khet go to
+  the new default. Plants look artificial: suggestions given, owner to choose.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.

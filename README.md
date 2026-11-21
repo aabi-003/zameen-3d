@@ -28,7 +28,8 @@ and the view cannot be dragged away from the land.
   2 m high and 0.4 m thick.
 - **Other three sides:** grey concrete pillars (1.8 m high, 15 cm square, one
   about every 3 m) joined by 3 lines of metal wire. Three pillars are left
-  out in the middle of the front to make the entrance gate (about 12 m wide).
+  out in the front to make the entrance gate (about 12 m wide), one pillar
+  toward the baag side of the middle (`GATE_SHIFT` in `main.js`).
 - Sunlight with soft shadows and a simple sky.
 
 ## Phase 3: objects you can move
@@ -38,9 +39,16 @@ Seen from the entrance (1 ft = 0.3048 m, all gaps 10 ft = 3.05 m):
 - **Left half: orchard (baag).** 200 baby plants, 2 to 2.5 ft tall, about
   20 ft apart: cheeku (round dark-green bush), anar (upright light-green
   shrub with red fruit) and khajoor (thin trunk, long palm leaves).
-- **Right half:** khet across the back, two pools side by side in front.
-  Their areas are exactly khet 2 : big pool 1.5 : small pool 0.5, after
-  leaving 10 ft gaps between them and from the boundary/wall.
+- **Right half, from the entrance going back:** big pool, small pool, khet
+  (one after another, long side left-right), then the kamra + solar at the
+  back near the wall. Pool and khet areas are exactly khet 2 : big pool 1.5
+  : small pool 0.5, after leaving 10 ft gaps between them and from the
+  boundary/wall.
+- **Kamra + solar** (one object, 24 ft x 10 ft): a small block room
+  (12 ft x 10 ft, 10 ft high, steel door, window with grill, flat concrete
+  roof) on one half, and two solar panels on a full steel stand (4 legs,
+  slanted rails, braces, concrete footings, tilted 25 degrees to the front)
+  on the other half.
 - **Pools:** blue water (lighter near the edge) inside a concrete edge.
 - **Khet:** tilled soil, an earth border and green crop rows.
 
@@ -75,7 +83,7 @@ are constants at the top of `main.js`.
 - **Phase 1 - done:** PWA skeleton and Three.js viewer.
 - **Phase 2 - done:** The land, wall and fence, built in Three.js code
   instead of Blender.
-- **Phase 3 - done:** Orchard plants, two pools and a khet, with
+- **Phase 3 - done:** Orchard plants, two pools, a khet and a kamra + solar, with
   drag-and-drop, spacing rules, warning beep and saved layout.
 
 The GLB loader is still in `main.js` for later use. It is switched off by

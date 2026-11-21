@@ -14,7 +14,8 @@ const PILLAR_HEIGHT = 1.8;      // fence on the other three sides
 const PILLAR_SIZE = 0.15;
 const PILLAR_SPACING = 3;       // target gap; adjusted slightly to fit the side exactly
 const WIRE_HEIGHTS = [0.5, 1.0, 1.5];
-const GATE_PILLARS = 3;         // pillars left out in the middle of the front = entrance gate
+const GATE_PILLARS = 3;         // pillars left out in the front = entrance gate
+const GATE_SHIFT = -1;          // move the gate by whole pillars: -1 = one pillar toward the baag (left) side
 const WIRE_THICKNESS = 0.015;   // thicker than real wire so it stays visible on a phone
 
 // The land is built in code below. Set this to true (and add the file) to
@@ -306,7 +307,7 @@ function makeFence() {
   const step = PLOT_SIZE / gaps;                        // ~3.02 m
   const spots = [];
   // Entrance gate: GATE_PILLARS pillars are left out in the middle of the front.
-  const gateFirst = Math.round(gaps / 2) - Math.floor(GATE_PILLARS / 2);
+  const gateFirst = Math.round(gaps / 2) - Math.floor(GATE_PILLARS / 2) + GATE_SHIFT;
   const gateLast = gateFirst + GATE_PILLARS - 1;
   const gateLeftX = -HALF + (gateFirst - 1) * step;     // last pillar before the gate
   const gateRightX = -HALF + (gateLast + 1) * step;     // first pillar after the gate
@@ -555,28 +556,42 @@ const AREA = {                        // where objects may stand (10 ft inside t
 };
 const RATIO = { khet: 2, bigPool: 1.5, smallPool: 0.5 };   // by area, right half
 const LAYOUT_KEY = 'zameen3d-layout-v1';
+const LAYOUT_VERSION = 2;            // 2: pools one after another + kamra
 
 const POOL_EDGE = 0.6;                // concrete edge width (m)
 const POOL_EDGE_H = 0.28;             // edge top above the ground
 const WATER_Y = 0.12;                 // water surface height
 const CROP_ROW_SPACING = 0.9;         // metres between crop rows
 
+// Kamra (small room) + 2 solar panels on a stand, as one object:
+// room on one half, solar stand on the other half.
+const ROOM_W = 12 * FT;               // room 12 ft x 10 ft, 10 ft high
+const ROOM_D = 10 * FT;
+const ROOM_H = 10 * FT;
+const UNIT_W = ROOM_W * 2;            // half room, half solar
+const UNIT_D = ROOM_D;
+const PANEL_W = 1.13;                 // one solar panel (m), standing the long way up the slope
+const PANEL_L = 2.28;
+const PANEL_TILT_DEG = 25;            // panels face the front (+Z), where the sun is
+const PANEL_LOW = 0.6;                // height of the low edge of the panels
+
 // ---------- Default layout ----------
-// Right half: khet across the back, the two pools side by side in front.
-// Sizes are worked out so the areas are exactly 2 : 1.5 : 0.5 with 10 ft gaps.
+// Right half, from the entrance going back: big pool, small pool, khet (all
+// full width, long side left-right), then kamra + solar at the back near
+// the wall. Pool and khet areas are exactly 2 : 1.5 : 0.5 with 10 ft gaps.
 function rectSizes() {
   const x0 = GAP / 2, x1 = AREA.maxX, W = x1 - x0;
-  const z0 = AREA.minZ, z1 = AREA.maxZ;
-  const L = z1 - z0 - GAP;                         // depth left after the gap between khet and pools
-  const k = RATIO.khet, p = RATIO.bigPool + RATIO.smallPool;
-  const Dp = (L * W * p) / (W * p + (W - GAP) * k);  // pools strip depth
-  const Dk = L - Dp;                                 // khet depth
-  const bigW = ((W - GAP) * RATIO.bigPool) / p;
-  const smallW = ((W - GAP) * RATIO.smallPool) / p;
+  const z0 = AREA.minZ + UNIT_D + GAP, z1 = AREA.maxZ;       // room strip kept free at the back
+  const total = RATIO.khet + RATIO.bigPool + RATIO.smallPool;
+  const L = z1 - z0 - 2 * GAP;                                // depth left after two gaps
+  const Db = (L * RATIO.bigPool) / total;
+  const Ds = (L * RATIO.smallPool) / total;
+  const Dk = (L * RATIO.khet) / total;
   return {
-    khet:      { w: W,      d: Dk, x: x0 + W / 2,      z: z0 + Dk / 2 },
-    smallPool: { w: smallW, d: Dp, x: x0 + smallW / 2, z: z1 - Dp / 2 },
-    bigPool:   { w: bigW,   d: Dp, x: x1 - bigW / 2,   z: z1 - Dp / 2 },
+    bigPool:   { w: W, d: Db, x: x0 + W / 2, z: z1 - Db / 2 },
+    smallPool: { w: W, d: Ds, x: x0 + W / 2, z: z1 - Db - GAP - Ds / 2 },
+    khet:      { w: W, d: Dk, x: x0 + W / 2, z: z0 + Dk / 2 },
+    kamra:     { w: UNIT_W, d: UNIT_D, x: x1 - UNIT_W / 2, z: AREA.minZ + UNIT_D / 2 },
   };
 }
 const RECT_DEFAULTS = rectSizes();
@@ -747,16 +762,121 @@ function makeKhet(w, d) {
   return g;
 }
 
+// ---------- Kamra (small room) + 2 solar panels on a stand ----------
+function makeSolarTexture() {
+  // 6 x 12 cells, dark blue with thin silver lines (one panel).
+  return canvasTexture(128, 256, (ctx, w, h) => {
+    const rand = mulberry32(81);
+    ctx.fillStyle = '#c9ccd0';
+    ctx.fillRect(0, 0, w, h);
+    const cw = w / 6, ch = h / 12;
+    for (let i = 0; i < 6; i++) {
+      for (let j = 0; j < 12; j++) {
+        const v = rand() * 10;
+        ctx.fillStyle = `rgb(${22 + v | 0},${40 + v | 0},${78 + v * 2 | 0})`;
+        ctx.fillRect(i * cw + 1, j * ch + 1, cw - 2, ch - 2);
+        ctx.fillStyle = 'rgba(190,200,215,0.35)';             // busbars
+        ctx.fillRect(i * cw + cw * 0.33, j * ch + 1, 1, ch - 2);
+        ctx.fillRect(i * cw + cw * 0.66, j * ch + 1, 1, ch - 2);
+      }
+    }
+  });
+}
+
+function makeRoomSolar(w, d) {
+  const g = new THREE.Group();
+  const concrete = new THREE.MeshLambertMaterial({ map: concreteTex });
+  const metal = new THREE.MeshLambertMaterial({ color: 0x9ea3a8 });
+  const add = (geo, mat, x, y, z) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  // --- Room: on the right half (toward the wall), so it never shades the panels.
+  const rx = w / 4;                                  // centre of the right half
+  const T = 0.23, PL = 0.15;                         // wall thickness, plinth height
+  add(new THREE.BoxGeometry(ROOM_W + 0.3, PL, ROOM_D + 0.3), concrete, rx, PL / 2, 0);   // plinth
+  const wallMat = new THREE.MeshLambertMaterial({ map: makeWallTexture() });
+  const wh = ROOM_H - 0.2;
+  const wy = PL + wh / 2;
+  add(metricBox(ROOM_W, wh, T, WALL_TILE_W, WALL_TILE_H), wallMat, rx, wy, ROOM_D / 2 - T / 2);    // front
+  add(metricBox(ROOM_W, wh, T, WALL_TILE_W, WALL_TILE_H), wallMat, rx, wy, -ROOM_D / 2 + T / 2);   // back
+  add(metricBox(T, wh, ROOM_D - 2 * T, WALL_TILE_W, WALL_TILE_H), wallMat, rx - ROOM_W / 2 + T / 2, wy, 0);
+  add(metricBox(T, wh, ROOM_D - 2 * T, WALL_TILE_W, WALL_TILE_H), wallMat, rx + ROOM_W / 2 - T / 2, wy, 0);
+  // Flat concrete roof with a small overhang.
+  add(metricBox(ROOM_W + 0.4, 0.18, ROOM_D + 0.4, 1.2, 1.2), concrete, rx, PL + wh + 0.09, 0);
+  // Steel door and a window with grill, on the front face.
+  const doorMat = new THREE.MeshLambertMaterial({ color: 0x3f5a4a });
+  const fz = ROOM_D / 2 + 0.02;
+  add(new THREE.BoxGeometry(0.95, 2.1, 0.05), doorMat, rx - ROOM_W / 4, PL + 1.05, fz);
+  add(new THREE.BoxGeometry(0.06, 0.06, 0.07), metal, rx - ROOM_W / 4 + 0.35, PL + 1.05, fz + 0.03);  // handle
+  add(new THREE.BoxGeometry(1.1, 1.0, 0.04), new THREE.MeshLambertMaterial({ color: 0x23303a }), rx + ROOM_W / 5, PL + 1.55, fz);
+  for (let i = -2; i <= 2; i++) {
+    add(new THREE.BoxGeometry(0.03, 1.0, 0.03), metal, rx + ROOM_W / 5 + i * 0.22, PL + 1.55, fz + 0.03);
+  }
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0xd9d4c7 });
+  add(new THREE.BoxGeometry(1.2, 0.08, 0.06), frameMat, rx + ROOM_W / 5, PL + 2.09, fz);
+  add(new THREE.BoxGeometry(1.2, 0.08, 0.06), frameMat, rx + ROOM_W / 5, PL + 1.01, fz);
+
+  // --- Solar stand: on the left half. Two panels side by side, full metal
+  // frame: 4 legs, 2 slanted rails, cross braces and concrete footings.
+  const sx = -w / 4;
+  const tilt = THREE.MathUtils.degToRad(PANEL_TILT_DEG);
+  const depth = PANEL_L * Math.cos(tilt), rise = PANEL_L * Math.sin(tilt);
+  const zFront = depth / 2, zBack = -depth / 2;
+  const legX = PANEL_W - 0.15;                       // legs under both panels
+  const P = 0.05;                                    // steel profile size
+  const backH = PANEL_LOW + rise;
+  for (const lx of [-legX, legX]) {
+    add(new THREE.BoxGeometry(0.25, 0.15, 0.25), concrete, sx + lx, 0.075, zFront);   // footings
+    add(new THREE.BoxGeometry(0.25, 0.15, 0.25), concrete, sx + lx, 0.075, zBack);
+    add(new THREE.BoxGeometry(P, PANEL_LOW, P), metal, sx + lx, PANEL_LOW / 2, zFront);
+    add(new THREE.BoxGeometry(P, backH, P), metal, sx + lx, backH / 2, zBack);
+    // Slanted rail from the front leg top to the back leg top.
+    const rail = add(new THREE.BoxGeometry(P, P, PANEL_L), metal, sx + lx, PANEL_LOW + rise / 2, 0);
+    rail.rotation.x = tilt;
+    // Diagonal brace from the front foot to the back leg top.
+    const bl = Math.hypot(depth, backH);
+    const brace = add(new THREE.BoxGeometry(P * 0.7, P * 0.7, bl), metal, sx + lx, backH / 2, 0);
+    brace.rotation.x = Math.atan2(backH, depth);
+  }
+  // Cross beams joining left and right legs (front low, back high, back middle).
+  add(new THREE.BoxGeometry(legX * 2 + P, P, P), metal, sx, PANEL_LOW - 0.05, zFront);
+  add(new THREE.BoxGeometry(legX * 2 + P, P, P), metal, sx, backH - 0.05, zBack);
+  add(new THREE.BoxGeometry(legX * 2 + P, P, P), metal, sx, backH * 0.45, zBack);
+
+  // Panels: silver aluminium frame with the blue cell sheet on top.
+  const panels = new THREE.Group();
+  panels.position.set(sx, PANEL_LOW + rise / 2 + P, 0);
+  panels.rotation.x = tilt;                          // high edge at the back, facing the front
+  const cellMat = new THREE.MeshPhongMaterial({ map: makeSolarTexture(), specular: 0x8899aa, shininess: 90 });
+  const alu = new THREE.MeshLambertMaterial({ color: 0xc8ccd0 });
+  for (const px of [-(PANEL_W / 2 + 0.01), PANEL_W / 2 + 0.01]) {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(PANEL_W, 0.04, PANEL_L), alu);
+    frame.position.x = px;
+    const cells = new THREE.Mesh(new THREE.PlaneGeometry(PANEL_W - 0.05, PANEL_L - 0.05).rotateX(-Math.PI / 2), cellMat);
+    cells.position.set(px, 0.021, 0);
+    frame.castShadow = true;
+    panels.add(frame, cells);
+  }
+  g.add(panels);
+  return g;
+}
+
 // ---------- Objects in the scene ----------
 const objectsRoot = new THREE.Group();
 objectsRoot.name = 'objects';
 scene.add(objectsRoot);
 
-const RECT_NAMES = { khet: 'Khet', bigPool: 'Bara pool', smallPool: 'Chhota pool' };
+const RECT_NAMES = { khet: 'Khet', bigPool: 'Bara pool', smallPool: 'Chhota pool', kamra: 'Kamra + solar' };
 const rects = {};
 for (const key of Object.keys(RECT_DEFAULTS)) {
   const { w, d, x, z } = RECT_DEFAULTS[key];
-  const group = key === 'khet' ? makeKhet(w, d) : makePool(w, d);
+  const group = key === 'khet' ? makeKhet(w, d) : key === 'kamra' ? makeRoomSolar(w, d) : makePool(w, d);
   group.name = key;
   objectsRoot.add(group);
   rects[key] = { kind: 'rect', key, w, d, x, z, group };
@@ -862,7 +982,7 @@ function clampToArea(item, x, z) {
 const round2 = (v) => Math.round(v * 1000) / 1000;   // millimetres
 function saveLayout() {
   const data = {
-    v: 1,
+    v: LAYOUT_VERSION,
     rects: Object.fromEntries(rectList.map((r) => [r.key, [round2(r.x), round2(r.z)]])),
     plants: plants.map((p) => [p.type, round2(p.x), round2(p.z), p.s]),
   };
@@ -876,11 +996,13 @@ function applyDefaultLayout() {
 function loadLayout() {
   let data = null;
   try { data = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch { data = null; }
-  if (!data || data.v !== 1) { applyDefaultLayout(); return; }
+  if (!data || (data.v !== 1 && data.v !== LAYOUT_VERSION)) { applyDefaultLayout(); return; }
 
   plants = [];
   for (const r of rectList) {
-    const s = data.rects && data.rects[r.key];
+    // Version 1 had the pools side by side; their old places do not fit the
+    // new sizes, so only the plants are kept from it.
+    const s = data.v === LAYOUT_VERSION && data.rects && data.rects[r.key];
     const ok = Array.isArray(s) && Number.isFinite(s[0]) && Number.isFinite(s[1]);
     r.x = ok ? s[0] : RECT_DEFAULTS[r.key].x;
     r.z = ok ? s[1] : RECT_DEFAULTS[r.key].z;
