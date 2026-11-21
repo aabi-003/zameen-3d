@@ -14,6 +14,9 @@ touch.
 | Pan (khiskao) | Drag with two fingers  | Right-button drag     |
 | Reset view    | Round button, bottom right | Same button       |
 
+| Select an object | Tap it (yellow ring/frame) | Click it |
+| Move an object | Put a finger on the selected object and drag, or press and hold any object for half a second | Drag the selected object |
+
 Camera movement is smooth (damped), the camera cannot go below the ground,
 and the view cannot be dragged away from the land.
 
@@ -28,6 +31,41 @@ and the view cannot be dragged away from the land.
   out in the middle of the front to make the entrance gate (about 12 m wide).
 - Sunlight with soft shadows and a simple sky.
 
+## Phase 3: objects you can move
+
+Seen from the entrance (1 ft = 0.3048 m, all gaps 10 ft = 3.05 m):
+
+- **Left half: orchard (baag).** 200 baby plants, 2 to 2.5 ft tall, about
+  20 ft apart: cheeku (round dark-green bush), anar (upright light-green
+  shrub with red fruit) and khajoor (thin trunk, long palm leaves).
+- **Right half:** khet across the back, two pools side by side in front.
+  Their areas are exactly khet 2 : big pool 1.5 : small pool 0.5, after
+  leaving 10 ft gaps between them and from the boundary/wall.
+- **Pools:** blue water (lighter near the edge) inside a concrete edge.
+- **Khet:** tilled soil, an earth border and green crop rows.
+
+**Bottom menu:** `+ Cheeku`, `+ Khajoor`, `+ Anar` add a plant at the free
+spot nearest the middle of the screen. `Delete` removes the selected plant
+(pools and khet can only be moved). `Reset layout` brings back the default
+layout (it asks first).
+
+**Rules while dragging:** plants at least 5 ft apart; pools, khet and plants
+at least 10 ft from each other; everything 10 ft inside the boundary. If a
+spot is too close, a red cross shows there, a short beep plays (Web Audio,
+no sound file; the phone also vibrates), and on release the object goes back
+to where it was. The camera does not move while you drag.
+
+**Saving:** the layout is saved in the browser (`localStorage`, key
+`zameen3d-layout-v1`) after every change, so it is still there after closing
+the app.
+
+**Adding a new plant type:** open `plants.js` and copy one line in
+`PLANT_TYPES` (id, name, shape `bush` or `palm`, height, colours). A button
+for it appears in the menu by itself.
+
+All textures (water, tilled soil, crop leaves) are drawn in code, so there
+are no image files and nothing copyrighted.
+
 The land is built in code in `main.js` (no model file). Colours and the look
 of the soil, wall and pillars follow the photos in `reference-photos/`. Sizes
 are constants at the top of `main.js`.
@@ -37,8 +75,8 @@ are constants at the top of `main.js`.
 - **Phase 1 - done:** PWA skeleton and Three.js viewer.
 - **Phase 2 - done:** The land, wall and fence, built in Three.js code
   instead of Blender.
-- **Phase 3 - later:** Placeable objects on the land (pool, pit, plants, crop
-  field).
+- **Phase 3 - done:** Orchard plants, two pools and a khet, with
+  drag-and-drop, spacing rules, warning beep and saved layout.
 
 The GLB loader is still in `main.js` for later use. It is switched off by
 `USE_GLB_MODEL = false`; set it to `true` and add `models/zameen.glb` to show
@@ -49,7 +87,8 @@ a Blender model instead of the built-in land.
 ```
 index.html             Page
 style.css              Styles
-main.js                3D viewer (Three.js + OrbitControls + GLTFLoader)
+main.js                3D viewer, land, pools, khet, drag-and-drop, saving
+plants.js              Plant types list (PLANT_TYPES) and how each plant is built
 sw.js                  Service worker (offline support)
 manifest.webmanifest   PWA manifest (name, icons, colours)
 icons/                 App icons
@@ -82,6 +121,9 @@ choose "Add to Home screen" to install it.
 - The shadow map is drawn once and reused, because nothing in the scene moves.
 - All pillars are one draw call, all wires another; textures are made in
   code, so there is nothing extra to download.
+- Plants use instancing: one draw call per plant type, however many plants.
+  All crop rows of the khet are one draw call too.
+- Shadows are redrawn only while something is being dragged or changed.
 
 ## Rules for this repo
 

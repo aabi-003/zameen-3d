@@ -1,6 +1,6 @@
 # Session notes (handoff)
 
-Last updated 2026-11-16, so the next session can continue from here.
+Last updated 2026-11-21, so the next session can continue from here.
 The owner prefers explanations in simple Roman Urdu, one step at a time.
 
 ## Where things stand
@@ -20,18 +20,24 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
   (`GATE_PILLARS`), an opening about 12 m wide with no wire across it.
 - Default camera (and the reset button): "top-front" view from the gate side,
   tilted 35 degrees down (`HOME_TILT_DEG`), backed off until the whole plot fits.
-- Phase 3 is on hold: the owner wants to think and discuss it first.
+- **Phase 3 is done (2026-11-21):** orchard plants (instanced, types in
+  `plants.js`), 2 pools + khet in the right half (area 2 : 1.5 : 0.5),
+  tap-to-select / hold-to-drag, 5 ft / 10 ft rules with red cross + beep,
+  layout saved in localStorage (`zameen3d-layout-v1`). Not yet confirmed by
+  the owner on the phone.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.
 
-## Phase 3 - later, do not start without asking
+## Phase 3 notes
 
-Placeable 3D objects on the land: pool, hole/pit, plants, crop field (khet).
+- Rects (pools, khet) are fixed size; only positions are saved.
+- `window.__zameen` is a small test hook used by automated browser checks.
+- Free texture sites (ambientCG) are blocked from the cloud container, so
+  all textures are drawn in code.
 
 ## Rules
 
 - Never commit the source land video (282 MB). Video files are in `.gitignore`.
-- Ask before starting Phase 3.
 - After changing files that the service worker caches, bump `CACHE` in `sw.js`
   if phones keep showing an old version.
