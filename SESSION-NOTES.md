@@ -44,6 +44,13 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
   on it). White car `gaadi` (draggable). Solar 2 has chhappar (thatch walls)
   on back and both sides, front open. Layout version still 3 (missing
   `gaadi` in a save just takes its default place).
+- **2026-11-24 (3rd round):** track lighter (alpha ~0.4-0.5); track is now
+  worked out from the car position (`trackPath(car)`, redrawn in
+  `placeRect`), car refused if its track would cross objects/plants. New car:
+  modern sedan from one extruded outline with wheel arches, cabin narrowing,
+  creased normals (no brand logos). Both solar stands: chhappar on front +
+  sides, back open, plastic chair each. Main channel 1.3 m wide with water,
+  branches 0.3 m with a 7 cm water line.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.

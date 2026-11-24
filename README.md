@@ -50,16 +50,21 @@ Seen from the entrance (1 ft = 0.3048 m, all gaps 10 ft = 3.05 m):
   - **Solar 1 and Solar 2:** each has two large panels (2.38 m x 1.3 m) side
     by side on a full steel frame (6 legs, slanted rails, braces, X brace,
     concrete footings), tilted 30 degrees toward the front. The back legs
-    are as tall as the room (10 ft). **Solar 2** has a chhappar: thatch
-    (straw) walls on bamboo rails on the back and both sides, front open.
-  - **Gaadi:** a white car parked in the corner next to Solar 2, at the end
-    of the track. It can be dragged too.
-- **Kacha track:** a dirt track (two wheel ruts, grassy middle) comes in
-  through the gate, turns left in a rounded half-U, runs behind the room and
-  solar stands and ends at the car. Nothing can be placed on the track.
-- **Water channels (naali):** a main channel takes water from the big pool
-  along the middle of the land; a branch runs along every row of the baag
-  through the plants' basins.
+    are as tall as the room (10 ft). Both stands are chhappar huts: thatch
+    (dry straw) walls on bamboo rails on the front and both sides, the back
+    (tall side) open, and a white plastic chair inside each.
+  - **Gaadi:** a white modern sedan (low, smooth body, sloping glass, slim
+    headlights, alloy wheels), parked in the corner next to Solar 2, at the
+    end of the track. It can be dragged too.
+- **Kacha track:** a light, half see-through dirt track (two faint wheel
+  ruts) comes in through the gate, turns toward the car in a rounded half-U
+  and ends at the car. **When the car is moved, the track follows it.** The
+  car cannot be put where its track would run over another object or a
+  plant, and nothing can be placed on the track.
+- **Water channels (naali):** a wide main channel full of water takes water
+  from the big pool along the middle of the land; a narrow branch with a
+  thin line of water runs along every row of the baag through the plants'
+  basins.
 - **Grass:** about 2,000 small grass tufts in patches on the dry land, along
   the fence, the track and the channel ridges. Tufts under a moved pool,
   khet, room, car or plant basin are hidden automatically.

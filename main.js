@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PLANT_TYPES, VARIANTS, MIN_HEIGHT, MAX_HEIGHT, buildPlantGeometry, plantMaterial } from './plants.js';
 
 // ---------- Settings ----------
@@ -576,8 +576,8 @@ const PANEL_GAP = 0.02;
 const SOLAR_BACK_H = ROOM_H;          // back legs are as tall as the room
 const SOLAR_W = 2 * PANEL_W + PANEL_GAP + 0.1;                        // footprint of one stand
 const SOLAR_D = PANEL_L * Math.cos(THREE.MathUtils.degToRad(PANEL_TILT_DEG)) + 0.25;
-const CAR_W = 1.8;                    // white car (m), nose toward the front fence
-const CAR_L = 4.5;
+const CAR_W = 1.78;                   // white sedan (m), nose toward the front fence
+const CAR_L = 4.62;
 const TRACK_W = 3.0;                  // kacha (dirt) track width
 const ORCHARD_ROWS_FREE = 3;          // front rows of the baag left empty for the room and solar
 
@@ -914,18 +914,19 @@ function makeSolarStand(withChhappar = false) {
   }
   g.add(panels);
 
-  // Chhappar: thatch (straw) walls on the back and both sides, front open,
-  // tied to bamboo rails.
+  // Chhappar: thatch (dry straw) walls on the front and both sides, tied to
+  // bamboo rails. The back (the tall side) is open, like a door, and a white
+  // plastic chair stands inside in the shade.
   if (withChhappar) {
     const thatch = new THREE.MeshLambertMaterial({ map: thatchTexture(), side: THREE.DoubleSide });
     const bamboo = new THREE.MeshLambertMaterial({ color: 0x9c8148 });
-    const bx = legX + 0.08, bz = zBack - 0.08;
-    const back = new THREE.PlaneGeometry(bx * 2, backH);
-    scaleUV(back, bx * 2, backH / 2);
-    addPart(g, back, thatch, 0, backH / 2, bz);
+    const bx = legX + 0.08, fz = zFront + 0.08;
+    const front = new THREE.PlaneGeometry(bx * 2, frontH);
+    scaleUV(front, bx * 2, frontH / 2);
+    addPart(g, front, thatch, 0, frontH / 2, fz);
     const shape = new THREE.Shape([
-      new THREE.Vector2(zFront, 0), new THREE.Vector2(bz, 0),
-      new THREE.Vector2(bz, backH), new THREE.Vector2(zFront, frontH),
+      new THREE.Vector2(fz, 0), new THREE.Vector2(zBack, 0),
+      new THREE.Vector2(zBack, backH), new THREE.Vector2(fz, frontH),
     ]);
     for (const sx of [-bx, bx]) {
       const side = new THREE.ShapeGeometry(shape);
@@ -941,11 +942,49 @@ function makeSolarStand(withChhappar = false) {
       const m = addPart(g, new THREE.CylinderGeometry(0.03, 0.03, len, 6), bamboo, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
     };
-    for (const y of [backH - 0.05, backH * 0.5]) rail(-bx, y, bz - 0.04, bx, y, bz - 0.04);
+    for (const y of [frontH - 0.05, frontH * 0.5]) rail(-bx, y, fz + 0.04, bx, y, fz + 0.04);
     for (const sx of [-bx - 0.04, bx + 0.04]) {
-      rail(sx, backH - 0.05, bz, sx, frontH - 0.05, zFront);
-      rail(sx, frontH * 0.5, bz, sx, frontH * 0.5, zFront);
+      rail(sx, backH - 0.05, zBack, sx, frontH - 0.05, fz);
+      rail(sx, frontH * 0.5, zBack, sx, frontH * 0.5, fz);
     }
+    const chair = makeChair();
+    chair.position.set(0.15, 0, (zFront + zBack) / 2 + 0.15);
+    chair.rotation.y = Math.PI + 0.25;               // faces the open back
+    g.add(chair);
+  }
+  return g;
+}
+
+// White plastic chair (the usual one-piece garden chair).
+function makeChair() {
+  const g = new THREE.Group();
+  const white = new THREE.MeshPhongMaterial({ color: 0xf1f1ec, specular: 0x333333, shininess: 25 });
+  const add = (geo, x, y, z, rx = 0) => {
+    const m = addPart(g, geo, white, x, y, z);
+    m.rotation.x = rx;
+    return m;
+  };
+  const leg = (x0, y0, z0, x1, y1, z1, r = 0.022) => {
+    const a = new THREE.Vector3(x0, y0, z0), b = new THREE.Vector3(x1, y1, z1);
+    const m = addPart(g, new THREE.CylinderGeometry(r, r * 1.25, a.distanceTo(b), 8), white, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
+  };
+  // Seat (front is +Z), slightly dished.
+  add(new THREE.BoxGeometry(0.46, 0.04, 0.44), 0, 0.44, 0);
+  add(new THREE.BoxGeometry(0.46, 0.06, 0.04), 0, 0.42, 0.21);
+  // Four legs, splayed outward.
+  for (const x of [-1, 1]) for (const z of [-1, 1]) leg(x * 0.2, 0.42, z * 0.19, x * 0.25, 0, z * 0.25);
+  // Back: two posts and five curved-looking slats, leaning back.
+  const tilt = -0.18;
+  for (const x of [-0.21, 0.21]) leg(x, 0.44, -0.21, x * 1.05, 0.9, -0.29, 0.02);
+  for (let i = 0; i < 5; i++) {
+    const y = 0.52 + i * 0.085, z = -0.22 - (y - 0.44) * 0.17;
+    add(new THREE.BoxGeometry(0.42, 0.05, 0.025), 0, y, z, tilt);
+  }
+  // Armrests on short supports.
+  for (const x of [-0.25, 0.25]) {
+    add(new THREE.BoxGeometry(0.05, 0.03, 0.44), x, 0.64, -0.02);
+    leg(x, 0.44, 0.17, x, 0.63, 0.17, 0.018);
   }
   return g;
 }
@@ -987,47 +1026,144 @@ function thatchTexture() {
   return thatchTex;
 }
 
-// ---------- White car (built from simple shapes) ----------
+// ---------- White car: a modern sedan (low, smooth, sloping glass) ----------
+// Built from one side outline (with wheel arches) pushed out to the car's
+// width; the cabin narrows toward the roof, and the front and back corners
+// are rounded in, so the body looks smooth and modern.
 function makeCar(w, d) {
   const g = new THREE.Group();
-  const paint = new THREE.MeshPhongMaterial({ color: 0xf2f3f0, specular: 0x777777, shininess: 70 });
-  const glass = new THREE.MeshPhongMaterial({ color: 0x1b252e, specular: 0x9aaabb, shininess: 100 });
-  const dark = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
-  const silver = new THREE.MeshLambertMaterial({ color: 0xb9bdc0 });
-  const L = d - 0.1, W = w - 0.08;
-  // Side outline of a sedan: x = along the car (front +), y = height.
-  const extrude = (pts, depth, mat) => {
-    const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
-    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2, curveSegments: 4 });
-    geo.translate(0, 0, -depth / 2);
-    geo.rotateY(-Math.PI / 2);                       // length along +Z
-    return addPart(g, geo, mat, 0, 0, 0);
-  };
+  const paint = new THREE.MeshPhongMaterial({ color: 0xf3f4f1, specular: 0x888888, shininess: 80 });
+  const glass = new THREE.MeshPhongMaterial({
+    color: 0x18222b, specular: 0x4a5a6a, shininess: 60, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const black = new THREE.MeshLambertMaterial({ color: 0x151515 });
+  const chrome = new THREE.MeshPhongMaterial({ color: 0xd5d8db, specular: 0xffffff, shininess: 100 });
+  const L = d - 0.02, W = w - 0.02;
   const f = L / 2, b = -L / 2;
-  extrude([[b, 0.32], [f, 0.32], [f, 0.62], [f - 0.25, 0.78], [f - 1.1, 0.86], [b + 0.8, 0.88], [b + 0.1, 0.84], [b, 0.62]], W - 0.08, paint);
-  extrude([[f - 1.1, 0.86], [f - 1.75, 1.36], [b + 1.25, 1.38], [b + 0.8, 0.88]], W - 0.3, glass);
-  addPart(g, new THREE.BoxGeometry(W - 0.28, 0.06, (f - 1.75) - (b + 1.25) + 0.08), paint, 0, 1.4, ((f - 1.75) + (b + 1.25)) / 2);   // roof
-  addPart(g, new THREE.BoxGeometry(W - 0.26, 0.5, 0.12), paint, 0, 1.12, ((f - 1.75) + (b + 1.25)) / 2 - 0.1);                  // middle pillars
-  // Wheels with silver hubs.
-  const tyre = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 18).rotateZ(Math.PI / 2);
-  const hub = new THREE.CylinderGeometry(0.18, 0.18, 0.24, 12).rotateZ(Math.PI / 2);
-  for (const x of [-(W / 2 - 0.1), W / 2 - 0.1]) {
-    for (const z of [f - 0.85, b + 0.8]) {
-      addPart(g, tyre, dark, x, 0.32, z);
-      addPart(g, hub, silver, x, 0.32, z);
+  const xf = f - 0.93, xr = xf - 2.7;               // front and rear axle
+  const WR = 0.31, ARCH = 0.42, BELT = 0.99, ROOF = 1.44;
+
+  const sh = new THREE.Shape();
+  sh.moveTo(f - 0.12, 0.2);
+  sh.lineTo(xf + ARCH, 0.2); sh.lineTo(xf + ARCH, WR);
+  sh.absarc(xf, WR, ARCH, 0, Math.PI, false);
+  sh.lineTo(xf - ARCH, 0.2);
+  sh.lineTo(xr + ARCH, 0.2); sh.lineTo(xr + ARCH, WR);
+  sh.absarc(xr, WR, ARCH, 0, Math.PI, false);
+  sh.lineTo(xr - ARCH, 0.2);
+  sh.lineTo(b + 0.1, 0.22);
+  sh.quadraticCurveTo(b - 0.02, 0.3, b, 0.55);       // rear bumper
+  sh.lineTo(b + 0.03, 0.86);
+  sh.quadraticCurveTo(b + 0.07, 0.98, b + 0.3, BELT);  // boot lid
+  sh.lineTo(b + 0.78, BELT + 0.01);
+  sh.lineTo(b + 1.55, ROOF - 0.05);                 // rear glass
+  sh.quadraticCurveTo(b + 2.2, ROOF + 0.01, b + 2.75, ROOF - 0.03);   // roof
+  sh.lineTo(f - 1.3, BELT);                         // long sloping windscreen
+  sh.quadraticCurveTo(f - 0.5, 0.93, f - 0.15, 0.78);   // bonnet
+  sh.quadraticCurveTo(f + 0.02, 0.7, f, 0.5);       // nose
+  sh.quadraticCurveTo(f - 0.02, 0.24, f - 0.12, 0.2);
+
+  const BEV = 0.06;
+  let body = new THREE.ExtrudeGeometry(sh, {
+    depth: W - 2 * BEV, bevelEnabled: true, bevelSize: BEV, bevelThickness: BEV, bevelSegments: 3, curveSegments: 14,
+  });
+  body.translate(0, 0, -(W - 2 * BEV) / 2);
+  // Width at a height y (cabin narrows to the roof) and at a length x
+  // (rounded front and back corners).
+  const narrow = (x, y) => {
+    const t = THREE.MathUtils.clamp((y - BELT) / (ROOF - BELT), 0, 1);
+    const e = THREE.MathUtils.clamp((Math.abs(x) - (f - 0.55)) / 0.55, 0, 1);
+    return (1 - 0.2 * t) * (1 - 0.06 * e * e);
+  };
+  const pos = body.attributes.position;
+  for (let i = 0; i < pos.count; i++) pos.setZ(i, pos.getZ(i) * narrow(pos.getX(i), pos.getY(i)));
+  // Smooth along the curves, crisp where panels meet at a sharp angle.
+  body.deleteAttribute('uv');
+  body = toCreasedNormals(body, 0.55);
+  body.rotateY(-Math.PI / 2);                        // length along +Z
+  addPart(g, body, paint, 0, 0, 0);
+
+  // Glass. Side windows lie on the sloping cabin sides; screen and rear
+  // glass lie on the outline's straight parts.
+  const half = W / 2;
+  const sideZ = (x, y) => half * narrow(x, y) + 0.004;
+  const roofY = (x) => {                            // inner edge of the side glass
+    if (x < b + 1.55) return BELT + 0.04 + ((x - (b + 0.78)) / 0.77) * (ROOF - 0.05 - BELT - 0.04) - 0.06;
+    if (x > b + 2.75) return ROOF - 0.03 - ((x - (b + 2.75)) / ((f - 1.3) - (b + 2.75))) * (ROOF - 0.03 - BELT) - 0.07;
+    return ROOF - 0.08;
+  };
+  const windowGeo = (x0, x1, side) => {
+    const pts = [];
+    const n = 10;
+    for (let i = 0; i <= n; i++) { const x = x0 + ((x1 - x0) * i) / n; pts.push([x, Math.max(BELT + 0.05, roofY(x))]); }
+    pts.push([x1, BELT + 0.05], [x0, BELT + 0.05]);
+    const geo = new THREE.ShapeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))));
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setZ(i, side * sideZ(p.getX(i), p.getY(i)));
+    geo.rotateY(-Math.PI / 2);
+    return geo;
+  };
+  for (const side of [-1, 1]) {
+    addPart(g, windowGeo(b + 0.92, -0.22, side), glass, 0, 0, 0);     // rear door + quarter glass
+    addPart(g, windowGeo(-0.1, f - 1.42, side), glass, 0, 0, 0);      // front door glass
+  }
+  const quad = (x0, y0, x1, y1, inset) => {
+    // The bevel puts the real surface BEV outside the outline: move out too.
+    let nx = -(y1 - y0), ny = x1 - x0;
+    if (ny < 0) { nx = -nx; ny = -ny; }
+    const nl = Math.hypot(nx, ny), off = BEV + 0.006;
+    x0 += (nx / nl) * off; x1 += (nx / nl) * off; y0 += (ny / nl) * off; y1 += (ny / nl) * off;
+    const z0 = half * narrow(x0, y0) - inset, z1 = half * narrow(x1, y1) - inset;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([
+      x0, y0, -z0, x0, y0, z0, x1, y1, z1, x0, y0, -z0, x1, y1, z1, x1, y1, -z1,
+    ], 3));
+    geo.computeVertexNormals();
+    geo.rotateY(-Math.PI / 2);
+    return geo;
+  };
+  addPart(g, quad(f - 1.36, BELT + 0.03, b + 2.8, ROOF - 0.06, 0.1), glass, 0, 0, 0);   // windscreen
+  addPart(g, quad(b + 0.84, BELT + 0.04, b + 1.5, ROOF - 0.08, 0.1), glass, 0, 0, 0);   // rear glass
+
+  // Wheels: dark wheel wells, tyres and silver alloy rims with 5 spokes.
+  const well = new THREE.CylinderGeometry(ARCH - 0.02, ARCH - 0.02, W - 0.16, 18, 1, false, Math.PI / 2, Math.PI)
+    .rotateX(Math.PI / 2).rotateY(Math.PI / 2);
+  const tyre = new THREE.CylinderGeometry(WR, WR, 0.21, 22).rotateZ(Math.PI / 2);
+  const rim = new THREE.CylinderGeometry(0.2, 0.2, 0.215, 18).rotateZ(Math.PI / 2);
+  for (const z of [xf, xr]) {
+    addPart(g, well, black, 0, WR, z);
+    for (const sx of [-1, 1]) {
+      const x = sx * (half - 0.14);
+      addPart(g, tyre, black, x, WR, z);
+      addPart(g, rim, chrome, x, WR, z);
+      for (let k = 0; k < 5; k++) {                   // dark gaps between spokes
+        const sp = addPart(g, new THREE.BoxGeometry(0.01, 0.15, 0.045), black, x + sx * 0.11, WR, z);
+        sp.rotation.x = (k / 5) * Math.PI * 2;
+        sp.position.y += Math.cos(sp.rotation.x) * 0.1;
+        sp.position.z += Math.sin(sp.rotation.x) * 0.1;
+      }
     }
   }
-  // Lights, grille and number plates.
-  const lamp = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
-  const tail = new THREE.MeshBasicMaterial({ color: 0xb3221c });
-  for (const x of [-0.58, 0.58]) {
-    addPart(g, new THREE.BoxGeometry(0.34, 0.1, 0.05), lamp, x, 0.64, f + 0.02);
-    addPart(g, new THREE.BoxGeometry(0.3, 0.1, 0.05), tail, x, 0.7, b - 0.02);
+  // Slim swept headlights, a wide dark lower grille with a chrome bar, slim
+  // tail lights, door mirrors and handles, number plates.
+  const lamp = new THREE.MeshPhongMaterial({ color: 0xdfe6ee, specular: 0xffffff, shininess: 120 });
+  const tail = new THREE.MeshPhongMaterial({ color: 0xa3161a, specular: 0xffffff, shininess: 80 });
+  for (const sx of [-1, 1]) {
+    const hl = addPart(g, new THREE.BoxGeometry(0.42, 0.06, 0.16), lamp, sx * 0.55, 0.71, f + 0.01);
+    hl.rotation.set(-0.55, sx * 0.25, 0);
+    const tl = addPart(g, new THREE.BoxGeometry(0.4, 0.08, 0.06), tail, sx * 0.55, 0.86, b - 0.04);
+    tl.rotation.y = -sx * 0.15;
+    addPart(g, new THREE.BoxGeometry(0.06, 0.1, 0.16), paint, sx * (half + 0.07), BELT + 0.06, f - 1.5);   // mirror
+    addPart(g, new THREE.BoxGeometry(0.02, 0.09, 0.15), black, sx * (half + 0.1), BELT + 0.06, f - 1.5);
+    for (const z of [0.45, -0.75]) addPart(g, new THREE.BoxGeometry(0.02, 0.03, 0.16), chrome, sx * (half + 0.005), 0.9, z);
   }
-  addPart(g, new THREE.BoxGeometry(0.7, 0.14, 0.05), dark, 0, 0.5, f + 0.02);
+  addPart(g, new THREE.BoxGeometry(1.15, 0.2, 0.06), black, 0, 0.38, f + 0.05);    // lower grille
+  addPart(g, new THREE.BoxGeometry(0.7, 0.04, 0.05), chrome, 0, 0.62, f + 0.06);   // chrome bar
+  addPart(g, new THREE.BoxGeometry(0.9, 0.03, 0.04), chrome, 0, 0.76, b - 0.05);
   const plate = new THREE.MeshLambertMaterial({ color: 0xf4f1e4 });
-  addPart(g, new THREE.BoxGeometry(0.5, 0.12, 0.03), plate, 0, 0.4, f + 0.05);
-  addPart(g, new THREE.BoxGeometry(0.5, 0.12, 0.03), plate, 0, 0.52, b - 0.05);
+  addPart(g, new THREE.BoxGeometry(0.5, 0.11, 0.02), plate, 0, 0.42, f + 0.09);
+  addPart(g, new THREE.BoxGeometry(0.5, 0.11, 0.02), plate, 0, 0.58, b - 0.07);
   return g;
 }
 
@@ -1042,7 +1178,7 @@ for (const key of Object.keys(RECT_DEFAULTS)) {
   const { w, d, x, z } = RECT_DEFAULTS[key];
   const group = key === 'khet' ? makeKhet(w, d)
     : key === 'kamra' ? makeRoom(w, d)
-    : key.startsWith('solar') ? makeSolarStand(key === 'solar2')
+    : key.startsWith('solar') ? makeSolarStand(true)
     : key === 'gaadi' ? makeCar(w, d)
     : makePool(w, d);
   group.name = key;
@@ -1054,26 +1190,34 @@ const rectList = Object.values(rects);
 // =====================================================================
 // ---------- Ground details: kacha track, water channels, grass ----------
 // =====================================================================
-// Centre line of the track: in through the gate, a rounded turn to the
-// left, along behind the room and solar stands, then a short turn into the
-// car's parking spot. Points every 0.5 m.
-function trackPath() {
+// Centre line of the track, for a car standing at car.x / car.z (nose to
+// the front): in through the gate, a rounded turn toward the car's side,
+// along behind the room and solar stands, then a turn up to the car.
+// It is worked out again whenever the car moves. Points every 0.5 m.
+const TRACK_RUN_Z = RECT_DEFAULTS.kamra.z - RECT_DEFAULTS.kamra.d / 2 - 2.2 - TRACK_W / 2;
+function trackPath(car) {
   const pts = [];
   const ge = gateEdges();
   const gx = (ge.left + ge.right) / 2;
-  const kamra = RECT_DEFAULTS.kamra, car = RECT_DEFAULTS.gaadi;
-  const zRun = kamra.z - kamra.d / 2 - 2.2 - TRACK_W / 2;    // 2.2 m behind the room
-  const R1 = 6, R2 = 3, step = 0.5;
+  const step = 0.5;
+  const dx = car.x - gx, sgn = dx < 0 ? -1 : 1;
+  if (Math.abs(dx) < 1.5) {                       // car straight in front of the gate
+    for (let z = HALF + 5; z >= car.z; z -= step) pts.push([gx, z]);
+    return pts;
+  }
+  const R1 = Math.min(6, Math.abs(dx) * 0.6), R2 = Math.min(3, Math.abs(dx) * 0.4);
+  const zEnd = car.z;                                       // track runs in under the car
+  const zRun = Math.min(TRACK_RUN_Z, car.z - CAR_L / 2 + 0.3 - R2);
   const zArc = zRun + R1;
   for (let z = HALF + 5; z > zArc; z -= step) pts.push([gx, z]);
-  for (let a = 0; a < Math.PI / 2; a += step / R1) pts.push([gx - R1 + R1 * Math.cos(a), zArc - R1 * Math.sin(a)]);
-  const x2 = car.x + R2;
-  for (let x = gx - R1; x > x2; x -= step) pts.push([x, zRun]);
-  for (let a = 0; a < Math.PI / 2; a += step / R2) pts.push([x2 - R2 * Math.sin(a), zRun + R2 - R2 * Math.cos(a)]);
-  for (let z = zRun + R2; z <= car.z + 0.5; z += step) pts.push([car.x, z]);
+  for (let a = 0; a < Math.PI / 2; a += step / R1) pts.push([gx + sgn * (R1 - R1 * Math.cos(a)), zArc - R1 * Math.sin(a)]);
+  const x2 = car.x - sgn * R2;
+  for (let x = gx + sgn * R1; sgn < 0 ? x > x2 : x < x2; x += sgn * step) pts.push([x, zRun]);
+  for (let a = 0; a < Math.PI / 2; a += step / R2) pts.push([x2 + sgn * R2 * Math.sin(a), zRun + R2 - R2 * Math.cos(a)]);
+  for (let z = zRun + R2; z <= zEnd; z += step) pts.push([car.x, z]);
   return pts;
 }
-const TRACK = trackPath();
+let TRACK = trackPath(RECT_DEFAULTS.gaadi);
 
 // A flat strip that follows a line of points (used for the track and channels).
 function stripGeometry(pts, width, tileLen, y) {
@@ -1127,16 +1271,19 @@ const edgeAlpha = (u, soft) => 255 * THREE.MathUtils.smoothstep(u, 0, soft) * TH
 // Kacha track: pressed, paler soil, two darker wheel ruts with tyre marks,
 // a slightly higher middle with a little grass.
 function makeTrack() {
+  // Kept light and half see-through, so it blends into the soil and does
+  // not stand out too much.
   const tex = stripTexture(128, 256, 131, (u, v, rand) => {
-    let c = [196, 176, 138];
+    let c = [216, 200, 164], a = 0.4;
     const rut = Math.min(Math.abs(u - 0.27), Math.abs(u - 0.73));
-    if (rut < 0.075) {
-      const tread = (Math.floor(v * 64) % 2) ? 0.92 : 1;
-      c = [150 * tread, 127 * tread, 96 * tread];
-    } else if (rut < 0.11) c = [170, 150, 115];
-    if (Math.abs(u - 0.5) < 0.1 && rand() < 0.08) c = [120, 130, 70];
-    const n = (rand() - 0.5) * 26;
-    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.14)];
+    if (rut < 0.07) {
+      const tread = (Math.floor(v * 64) % 2) ? 0.97 : 1;
+      c = [188 * tread, 168 * tread, 132 * tread];
+      a = 0.5;
+    }
+    if (Math.abs(u - 0.5) < 0.1 && rand() < 0.04) c = [160, 160, 110];
+    const n = (rand() - 0.5) * 14;
+    return [c[0] + n, c[1] + n, c[2] + n, a * edgeAlpha(u, 0.3)];
   });
   const mesh = new THREE.Mesh(stripGeometry(TRACK, TRACK_W, 3, 0.012), new THREE.MeshLambertMaterial({
     map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
@@ -1161,36 +1308,43 @@ function line(x0, z0, x1, z1) {
   const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.5));
   return Array.from({ length: n + 1 }, (_, i) => [x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n]);
 }
+const MAIN_CHANNEL_W = 1.3;            // main channel (m), full of water
+const MAIN_WATER_W = 0.9;
+const BRANCH_W = 0.3;                  // branch channels along the baag rows
+const BRANCH_WATER_W = 0.07;           // thin line of water in them
 function makeChannels() {
   const rowsZ = orchardRowsZ();
   const zTop = rowsZ[0] + 4;
   const pool = RECT_DEFAULTS.bigPool;
-  const mainPts = [...line(pool.x - pool.w / 2 + 0.3, zTop, 0.4, zTop), ...line(0, zTop - 0.4, 0, AREA.minZ)];
-  const ridge = [178, 152, 112], wet = [92, 72, 52];
-  const mainTex = stripTexture(64, 64, 141, (u, v, rand) => {
+  const mainPts = [...line(pool.x - pool.w / 2 + 0.3, zTop, 0.6, zTop), ...line(0, zTop - 0.6, 0, AREA.minZ)];
+  const ridge = [184, 160, 120], wet = [104, 82, 60];
+  // Soil part: raised dry ridges at both edges, dark wet banks inside.
+  const soilTex = stripTexture(64, 64, 141, (u, v, rand) => {
     const d = Math.abs(u - 0.5);
-    let c = d > 0.3 ? ridge : d > 0.2 ? [120, 96, 70] : [76, 104, 118];     // ridges, wet sides, water
-    if (d <= 0.2 && Math.abs(u - 0.42) < 0.03) c = [140, 168, 180];        // light on the water
+    const c = d > 0.36 ? ridge : wet;
     const n = (rand() - 0.5) * 16;
-    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.2)];
+    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.18)];
   });
-  const branchTex = stripTexture(64, 64, 151, (u, v, rand) => {
-    const d = Math.abs(u - 0.5);
-    const c = d > 0.28 ? ridge : wet;
-    const n = (rand() - 0.5) * 18;
-    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.22)];
+  const soilMat = new THREE.MeshLambertMaterial({
+    map: soilTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
-  const mat = (map) => new THREE.MeshLambertMaterial({
-    map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  // Water: blue with ripples and a shine from the sun.
+  const wTex = waterTex.clone();
+  wTex.repeat.set(1, 1);
+  const waterMat = new THREE.MeshPhongMaterial({
+    map: wTex, color: 0x4d7f9a, specular: 0x8fb0c4, shininess: 60,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
   });
   const group = new THREE.Group();
   group.name = 'channels';
-  const main = new THREE.Mesh(stripGeometry(mainPts, 0.7, 1, 0.01), mat(mainTex));
-  const branches = new THREE.Mesh(
-    mergeGeometries(rowsZ.map((z) => stripGeometry(line(-0.3, z, AREA.minX - 0.4, z), 0.45, 1, 0.009))),
-    mat(branchTex),
-  );
-  for (const m of [main, branches]) { m.receiveShadow = true; m.renderOrder = 1; group.add(m); }
+  const branchLines = rowsZ.map((z) => line(-0.3, z, AREA.minX - 0.4, z));
+  const parts = [
+    new THREE.Mesh(stripGeometry(mainPts, MAIN_CHANNEL_W, 1, 0.01), soilMat),
+    new THREE.Mesh(stripGeometry(mainPts, MAIN_WATER_W, 8, 0.02), waterMat),
+    new THREE.Mesh(mergeGeometries(branchLines.map((l) => stripGeometry(l, BRANCH_W, 1, 0.009))), soilMat),
+    new THREE.Mesh(mergeGeometries(branchLines.map((l) => stripGeometry(l, BRANCH_WATER_W, 3, 0.016))), waterMat),
+  ];
+  for (const m of parts) { m.receiveShadow = true; m.renderOrder = 1; group.add(m); }
   return { group, mainPts, rowsZ };
 }
 
@@ -1198,11 +1352,47 @@ const trackMesh = makeTrack();
 const channels = makeChannels();
 scene.add(trackMesh, channels.group);
 
-// Distance from a point to the track centre line.
+// Track points on a 2 m grid, for a quick distance check.
+let trackGrid = new Map();
+function indexTrack() {
+  trackGrid = new Map();
+  for (const pt of TRACK) {
+    const k = `${Math.floor(pt[0] / 2)},${Math.floor(pt[1] / 2)}`;
+    if (!trackGrid.has(k)) trackGrid.set(k, []);
+    trackGrid.get(k).push(pt);
+  }
+}
+indexTrack();
+// Distance from a point to the track centre line (checked up to ~4 m away).
 function trackDist(x, z) {
   let best = Infinity;
-  for (const [tx, tz] of TRACK) best = Math.min(best, (tx - x) ** 2 + (tz - z) ** 2);
+  const cx = Math.floor(x / 2), cz = Math.floor(z / 2);
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+    for (const [tx, tz] of trackGrid.get(`${cx + i},${cz + j}`) || []) best = Math.min(best, (tx - x) ** 2 + (tz - z) ** 2);
+  }
   return Math.sqrt(best);
+}
+// The car moved: work out its track again and redraw it.
+function updateTrack(car) {
+  TRACK = trackPath(car);
+  indexTrack();
+  trackMesh.geometry.dispose();
+  trackMesh.geometry = stripGeometry(TRACK, TRACK_W, 3, 0.012);
+}
+// Would the car's track at this spot run over another object or a plant?
+function carTrackBlocked(x, z) {
+  const path = trackPath({ x, z });
+  const pad = TRACK_W / 2;
+  for (const r of rectList) {
+    if (r.key === 'gaadi') continue;
+    if (path.some(([tx, tz]) => Math.abs(tx - r.x) < r.w / 2 + pad && Math.abs(tz - r.z) < r.d / 2 + pad)) {
+      return `Gaadi ka raasta ${RECT_NAMES[r.key]} se guzrega`;
+    }
+  }
+  for (const p of plants) {
+    if (path.some(([tx, tz]) => (tx - p.x) ** 2 + (tz - p.z) ** 2 < (pad + 0.3) ** 2)) return 'Gaadi ka raasta paudhon se guzrega';
+  }
+  return null;
 }
 // Objects may not stand on the track (the car may: it is parked at its end).
 function onTrack(item, x, z) {
@@ -1257,11 +1447,11 @@ const grassSpots = (() => {
   const rand = mulberry32(909);
   const noise = makeNoise(505);
   const out = [];
-  const add = (x, z, big = 1) => {
+  const add = (x, z, big = 1, loose = false) => {
     if (Math.abs(x) > HALF - 0.4 || Math.abs(z) > HALF - 0.4 || x > HALF - WALL_THICKNESS - 0.3) return;
     const h = (0.14 + rand() * 0.16) * big;
     const green = rand();
-    out.push({ x, z, h, w: h * (1.1 + rand() * 0.6), rot: rand() * Math.PI,
+    out.push({ x, z, loose, h, w: h * (1.1 + rand() * 0.6), rot: rand() * Math.PI,
       tint: green < 0.6 ? [0.95 + rand() * 0.15, 1, 0.9] : [1.12, 1.04, 0.82] });
   };
   for (let i = 0; i < 14000 && out.length < 2200; i++) {
@@ -1270,8 +1460,7 @@ const grassSpots = (() => {
     const patch = noise(x / 8 + 20, z / 8 + 20);
     const p = edge < 2 ? 0.7 : patch > 0.66 ? 0.6 : patch > 0.55 ? 0.12 : 0.012;
     if (rand() > p) continue;
-    if (trackDist(x, z) < TRACK_W / 2 + 0.2) continue;        // track gets its own tufts below
-    add(x, z);
+    add(x, z, 1, true);
   }
   TRACK.forEach(([x, z], i) => {
     if (z > HALF - 0.5) return;
@@ -1285,9 +1474,9 @@ const grassSpots = (() => {
   // Along the channel ridges: beside the main channel (left/right) and beside
   // each branch (front/back).
   const side = () => (rand() < 0.5 ? -1 : 1);
-  for (const [x, z] of channels.mainPts) if (rand() < 0.22) add(x + side() * 0.42, z, 0.8);
+  for (const [x, z] of channels.mainPts) if (rand() < 0.22) add(x + side() * (MAIN_CHANNEL_W / 2 + 0.05), z, 0.8);
   for (const z of channels.rowsZ) {
-    for (const [x] of line(-0.3, z, AREA.minX - 0.4, z)) if (rand() < 0.22) add(x, z + side() * 0.3, 0.8);
+    for (const [x] of line(-0.3, z, AREA.minX - 0.4, z)) if (rand() < 0.22) add(x, z + side() * (BRANCH_W / 2 + 0.06), 0.8);
   }
   return out;
 })();
@@ -1318,6 +1507,10 @@ function updateGrass() {
   for (const s of grassSpots) {
     if (rectList.some((r) => Math.abs(s.x - r.x) < r.w / 2 + 0.25 && Math.abs(s.z - r.z) < r.d / 2 + 0.25)) continue;
     if (nearPlant(s.x, s.z)) continue;
+    if (s.loose) {                                  // no loose tufts on the wheel ruts
+      const d = trackDist(s.x, s.z);
+      if (d > 0.3 && d < TRACK_W / 2 + 0.1) continue;
+    }
     _gq.setFromAxisAngle(_gUp, s.rot);
     _gm.compose(_gp.set(s.x, 0, s.z), _gq, _gs.set(s.w, s.h, s.w));
     grassMesh.setMatrixAt(n, _gm);
@@ -1396,6 +1589,7 @@ function refreshPlants() {
 }
 function placeRect(r) {
   r.group.position.set(r.x, 0, r.z);
+  if (r.key === 'gaadi') updateTrack(r);
 }
 function sceneChanged() {
   updateGrass();
@@ -1412,6 +1606,7 @@ function rectGap(ax, az, aw, ad, b) {
 // Returns null if the spot is allowed, otherwise a short reason.
 function checkSpot(item, x, z) {
   if (onTrack(item, x, z)) return 'Kache raaste (track) par nahi rakh sakte';
+  if (item.key === 'gaadi') { const bad = carTrackBlocked(x, z); if (bad) return bad; }
   const isPlant = item.kind === 'plant';
   const hw = isPlant ? 0 : item.w / 2, hd = isPlant ? 0 : item.d / 2;
   if (x - hw < AREA.minX - EPS || x + hw > AREA.maxX + EPS ||
