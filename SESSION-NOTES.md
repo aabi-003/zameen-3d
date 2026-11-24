@@ -29,7 +29,16 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
   draggable object at the back-right, gate moved one pillar toward the baag
   side (`GATE_SHIFT = -1`; owner said "add a pillar on the water side, remove
   one on the baag side"). Old v1 layouts keep their plants; pools/khet go to
-  the new default. Plants look artificial: suggestions given, owner to choose.
+  the new default.
+- **2026-11-24 changes (layout version 3):** kamra, solar1, solar2 are three
+  separate objects at the front of the baag, right next to the gate on its
+  left (owner said the back-right corner was wrong). First 3 baag rows
+  removed (`ORCHARD_ROWS_FREE`). Solar: 2 big panels per stand, back legs =
+  room height, tilt 30 deg, facing +Z (front). Plants redone with leaf cards,
+  3 designs per type, natural colours, per-plant tint/lean, thaala with
+  earth ring (suggestions 1-3 + part of 4). Grass tufts / water channels
+  (rest of 4) offered, not done. Ready-made 3D models (5) not done: model
+  sites are blocked from the container.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.

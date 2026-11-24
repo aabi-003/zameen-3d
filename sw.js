@@ -1,7 +1,7 @@
 // Zameen 3D service worker.
 // Network-first: always show the newest files when online,
 // fall back to the saved copy when offline.
-const CACHE = 'zameen-3d-v7';
+const CACHE = 'zameen-3d-v8';
 
 const SHELL = [
   './',

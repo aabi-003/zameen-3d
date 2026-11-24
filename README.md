@@ -36,19 +36,25 @@ and the view cannot be dragged away from the land.
 
 Seen from the entrance (1 ft = 0.3048 m, all gaps 10 ft = 3.05 m):
 
-- **Left half: orchard (baag).** 200 baby plants, 2 to 2.5 ft tall, about
-  20 ft apart: cheeku (round dark-green bush), anar (upright light-green
-  shrub with red fruit) and khajoor (thin trunk, long palm leaves).
+- **Left half: orchard (baag).** 170 baby plants, 2 to 2.5 ft tall, about
+  20 ft apart: cheeku (round crown of broad dark leaves), anar (bushy shrub
+  of thin stems, narrow leaves, red flowers and fruit) and khajoor (short
+  trunk, long feathery palm leaves). Each plant stands in a watered soil
+  basin (thaala) with a low earth ring. The first 3 rows at the front are
+  left free for the kamra and solar stands.
+- **Kamra and solar, at the gate:** in the baag, right next to the gate on
+  its left (seen from inside), 10 ft inside the front fence, as three
+  separate objects 10 ft apart:
+  - **Kamra:** small block room, 12 ft x 10 ft, 10 ft high, steel door on
+    the gate side, grilled windows, flat concrete roof.
+  - **Solar 1 and Solar 2:** each has two large panels (2.38 m x 1.3 m) side
+    by side on a full steel frame (6 legs, slanted rails, braces, X brace,
+    concrete footings), tilted 30 degrees toward the front. The back legs
+    are as tall as the room (10 ft).
 - **Right half, from the entrance going back:** big pool, small pool, khet
-  (one after another, long side left-right), then the kamra + solar at the
-  back near the wall. Pool and khet areas are exactly khet 2 : big pool 1.5
+  (one after another, long side left-right). Pool and khet areas are exactly khet 2 : big pool 1.5
   : small pool 0.5, after leaving 10 ft gaps between them and from the
   boundary/wall.
-- **Kamra + solar** (one object, 24 ft x 10 ft): a small block room
-  (12 ft x 10 ft, 10 ft high, steel door, window with grill, flat concrete
-  roof) on one half, and two solar panels on a full steel stand (4 legs,
-  slanted rails, braces, concrete footings, tilted 25 degrees to the front)
-  on the other half.
 - **Pools:** blue water (lighter near the edge) inside a concrete edge.
 - **Khet:** tilled soil, an earth border and green crop rows.
 
@@ -67,8 +73,14 @@ to where it was. The camera does not move while you drag.
 `zameen3d-layout-v1`) after every change, so it is still there after closing
 the app.
 
+**How the plants are drawn:** each plant is a few thin stems plus many small
+flat "leaf cards"; each card is a picture of a twig with real leaf shapes,
+drawn in code with see-through gaps. Every type has 3 designs (`VARIANTS`),
+and every plant gets its own height, turn, slight lean and leaf shade (most
+green, some a little yellow or dusty). One draw call per type and design.
+
 **Adding a new plant type:** open `plants.js` and copy one line in
-`PLANT_TYPES` (id, name, shape `bush` or `palm`, height, colours). A button
+`PLANT_TYPES` (id, name, shape `bush` or `palm`, height, colours, leaf size). A button
 for it appears in the menu by itself.
 
 All textures (water, tilled soil, crop leaves) are drawn in code, so there
@@ -83,7 +95,7 @@ are constants at the top of `main.js`.
 - **Phase 1 - done:** PWA skeleton and Three.js viewer.
 - **Phase 2 - done:** The land, wall and fence, built in Three.js code
   instead of Blender.
-- **Phase 3 - done:** Orchard plants, two pools, a khet and a kamra + solar, with
+- **Phase 3 - done:** Orchard plants, two pools, a khet, a kamra and two solar stands, with
   drag-and-drop, spacing rules, warning beep and saved layout.
 
 The GLB loader is still in `main.js` for later use. It is switched off by
