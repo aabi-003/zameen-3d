@@ -50,7 +50,19 @@ Seen from the entrance (1 ft = 0.3048 m, all gaps 10 ft = 3.05 m):
   - **Solar 1 and Solar 2:** each has two large panels (2.38 m x 1.3 m) side
     by side on a full steel frame (6 legs, slanted rails, braces, X brace,
     concrete footings), tilted 30 degrees toward the front. The back legs
-    are as tall as the room (10 ft).
+    are as tall as the room (10 ft). **Solar 2** has a chhappar: thatch
+    (straw) walls on bamboo rails on the back and both sides, front open.
+  - **Gaadi:** a white car parked in the corner next to Solar 2, at the end
+    of the track. It can be dragged too.
+- **Kacha track:** a dirt track (two wheel ruts, grassy middle) comes in
+  through the gate, turns left in a rounded half-U, runs behind the room and
+  solar stands and ends at the car. Nothing can be placed on the track.
+- **Water channels (naali):** a main channel takes water from the big pool
+  along the middle of the land; a branch runs along every row of the baag
+  through the plants' basins.
+- **Grass:** about 2,000 small grass tufts in patches on the dry land, along
+  the fence, the track and the channel ridges. Tufts under a moved pool,
+  khet, room, car or plant basin are hidden automatically.
 - **Right half, from the entrance going back:** big pool, small pool, khet
   (one after another, long side left-right). Pool and khet areas are exactly khet 2 : big pool 1.5
   : small pool 0.5, after leaving 10 ft gaps between them and from the

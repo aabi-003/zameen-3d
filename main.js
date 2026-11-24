@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PLANT_TYPES, VARIANTS, MIN_HEIGHT, MAX_HEIGHT, buildPlantGeometry, plantMaterial } from './plants.js';
 
 // ---------- Settings ----------
@@ -575,6 +576,9 @@ const PANEL_GAP = 0.02;
 const SOLAR_BACK_H = ROOM_H;          // back legs are as tall as the room
 const SOLAR_W = 2 * PANEL_W + PANEL_GAP + 0.1;                        // footprint of one stand
 const SOLAR_D = PANEL_L * Math.cos(THREE.MathUtils.degToRad(PANEL_TILT_DEG)) + 0.25;
+const CAR_W = 1.8;                    // white car (m), nose toward the front fence
+const CAR_L = 4.5;
+const TRACK_W = 3.0;                  // kacha (dirt) track width
 const ORCHARD_ROWS_FREE = 3;          // front rows of the baag left empty for the room and solar
 
 // Gate opening (x of the last pillar left of it and the first one right of
@@ -613,6 +617,8 @@ function rectSizes() {
   out.kamra =  { w: ROOM_W,  d: ROOM_D,  x: kx, z: zf - ROOM_D / 2 };
   out.solar1 = { w: SOLAR_W, d: SOLAR_D, x: s1, z: zf - SOLAR_D / 2 };
   out.solar2 = { w: SOLAR_W, d: SOLAR_D, x: s2, z: zf - SOLAR_D / 2 };
+  // Car parked in the corner next to Solar 2 (10 ft away), at the end of the track.
+  out.gaadi = { w: CAR_W, d: CAR_L, x: s2 - SOLAR_W / 2 - GAP - CAR_W / 2 - 0.1, z: zf - CAR_L / 2 };
   return out;
 }
 const RECT_DEFAULTS = rectSizes();
@@ -856,7 +862,7 @@ function makeRoom(w, d) {
 // One solar stand: two large panels side by side on a full steel frame.
 // Back legs are as tall as the room; the slope is PANEL_TILT_DEG.
 let solarTex = null;
-function makeSolarStand() {
+function makeSolarStand(withChhappar = false) {
   const g = new THREE.Group();
   const add = (geo, mat, x, y, z) => addPart(g, geo, mat, x, y, z);
   const tilt = THREE.MathUtils.degToRad(PANEL_TILT_DEG);
@@ -907,6 +913,121 @@ function makeSolarStand() {
     panels.add(frame, cells);
   }
   g.add(panels);
+
+  // Chhappar: thatch (straw) walls on the back and both sides, front open,
+  // tied to bamboo rails.
+  if (withChhappar) {
+    const thatch = new THREE.MeshLambertMaterial({ map: thatchTexture(), side: THREE.DoubleSide });
+    const bamboo = new THREE.MeshLambertMaterial({ color: 0x9c8148 });
+    const bx = legX + 0.08, bz = zBack - 0.08;
+    const back = new THREE.PlaneGeometry(bx * 2, backH);
+    scaleUV(back, bx * 2, backH / 2);
+    addPart(g, back, thatch, 0, backH / 2, bz);
+    const shape = new THREE.Shape([
+      new THREE.Vector2(zFront, 0), new THREE.Vector2(bz, 0),
+      new THREE.Vector2(bz, backH), new THREE.Vector2(zFront, frontH),
+    ]);
+    for (const sx of [-bx, bx]) {
+      const side = new THREE.ShapeGeometry(shape);
+      const uv = side.attributes.uv, pos = side.attributes.position;
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getY(i) / 2);
+      side.rotateY(-Math.PI / 2);                    // shape x -> world z
+      addPart(g, side, thatch, sx, 0, 0);
+    }
+    // Bamboo rails along the tops and the middle.
+    const rail = (x0, y0, z0, x1, y1, z1) => {
+      const a = new THREE.Vector3(x0, y0, z0), b = new THREE.Vector3(x1, y1, z1);
+      const len = a.distanceTo(b);
+      const m = addPart(g, new THREE.CylinderGeometry(0.03, 0.03, len, 6), bamboo, (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
+    };
+    for (const y of [backH - 0.05, backH * 0.5]) rail(-bx, y, bz - 0.04, bx, y, bz - 0.04);
+    for (const sx of [-bx - 0.04, bx + 0.04]) {
+      rail(sx, backH - 0.05, bz, sx, frontH - 0.05, zFront);
+      rail(sx, frontH * 0.5, bz, sx, frontH * 0.5, zFront);
+    }
+  }
+  return g;
+}
+
+function scaleUV(geo, su, sv) {
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+}
+
+// Dry straw thatch: thin golden-brown stalks, with two dark binding bands.
+// One tile is 1 m wide and 2 m tall.
+let thatchTex = null;
+function thatchTexture() {
+  if (thatchTex) return thatchTex;
+  thatchTex = canvasTexture(128, 256, (ctx, w, h) => {
+    const rand = mulberry32(97);
+    ctx.fillStyle = '#9b7c47';
+    ctx.fillRect(0, 0, w, h);
+    const cols = ['#d8bb7d', '#c4a466', '#a98a52', '#e3cb92', '#8c6f3e'];
+    for (let i = 0; i < 900; i++) {
+      const x = rand() * w, y = rand() * h, len = 30 + rand() * 70;
+      ctx.strokeStyle = cols[(rand() * cols.length) | 0];
+      ctx.lineWidth = 1 + rand() * 1.2;
+      ctx.beginPath();
+      for (const ox of [-w, 0, w]) {
+        for (const oy of [-h, 0, h]) {
+          ctx.moveTo(x + ox, y + oy);
+          ctx.lineTo(x + ox + (rand() - 0.5) * 6, y + oy + len);
+        }
+      }
+      ctx.stroke();
+    }
+    for (const y of [h * 0.25, h * 0.75]) {           // binding ropes
+      ctx.fillStyle = 'rgba(70,50,25,0.75)';
+      ctx.fillRect(0, y - 3, w, 6);
+    }
+    addGrain(ctx, w, h, rand, 18);
+  });
+  return thatchTex;
+}
+
+// ---------- White car (built from simple shapes) ----------
+function makeCar(w, d) {
+  const g = new THREE.Group();
+  const paint = new THREE.MeshPhongMaterial({ color: 0xf2f3f0, specular: 0x777777, shininess: 70 });
+  const glass = new THREE.MeshPhongMaterial({ color: 0x1b252e, specular: 0x9aaabb, shininess: 100 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+  const silver = new THREE.MeshLambertMaterial({ color: 0xb9bdc0 });
+  const L = d - 0.1, W = w - 0.08;
+  // Side outline of a sedan: x = along the car (front +), y = height.
+  const extrude = (pts, depth, mat) => {
+    const shape = new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2, curveSegments: 4 });
+    geo.translate(0, 0, -depth / 2);
+    geo.rotateY(-Math.PI / 2);                       // length along +Z
+    return addPart(g, geo, mat, 0, 0, 0);
+  };
+  const f = L / 2, b = -L / 2;
+  extrude([[b, 0.32], [f, 0.32], [f, 0.62], [f - 0.25, 0.78], [f - 1.1, 0.86], [b + 0.8, 0.88], [b + 0.1, 0.84], [b, 0.62]], W - 0.08, paint);
+  extrude([[f - 1.1, 0.86], [f - 1.75, 1.36], [b + 1.25, 1.38], [b + 0.8, 0.88]], W - 0.3, glass);
+  addPart(g, new THREE.BoxGeometry(W - 0.28, 0.06, (f - 1.75) - (b + 1.25) + 0.08), paint, 0, 1.4, ((f - 1.75) + (b + 1.25)) / 2);   // roof
+  addPart(g, new THREE.BoxGeometry(W - 0.26, 0.5, 0.12), paint, 0, 1.12, ((f - 1.75) + (b + 1.25)) / 2 - 0.1);                  // middle pillars
+  // Wheels with silver hubs.
+  const tyre = new THREE.CylinderGeometry(0.32, 0.32, 0.22, 18).rotateZ(Math.PI / 2);
+  const hub = new THREE.CylinderGeometry(0.18, 0.18, 0.24, 12).rotateZ(Math.PI / 2);
+  for (const x of [-(W / 2 - 0.1), W / 2 - 0.1]) {
+    for (const z of [f - 0.85, b + 0.8]) {
+      addPart(g, tyre, dark, x, 0.32, z);
+      addPart(g, hub, silver, x, 0.32, z);
+    }
+  }
+  // Lights, grille and number plates.
+  const lamp = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
+  const tail = new THREE.MeshBasicMaterial({ color: 0xb3221c });
+  for (const x of [-0.58, 0.58]) {
+    addPart(g, new THREE.BoxGeometry(0.34, 0.1, 0.05), lamp, x, 0.64, f + 0.02);
+    addPart(g, new THREE.BoxGeometry(0.3, 0.1, 0.05), tail, x, 0.7, b - 0.02);
+  }
+  addPart(g, new THREE.BoxGeometry(0.7, 0.14, 0.05), dark, 0, 0.5, f + 0.02);
+  const plate = new THREE.MeshLambertMaterial({ color: 0xf4f1e4 });
+  addPart(g, new THREE.BoxGeometry(0.5, 0.12, 0.03), plate, 0, 0.4, f + 0.05);
+  addPart(g, new THREE.BoxGeometry(0.5, 0.12, 0.03), plate, 0, 0.52, b - 0.05);
   return g;
 }
 
@@ -915,19 +1036,300 @@ const objectsRoot = new THREE.Group();
 objectsRoot.name = 'objects';
 scene.add(objectsRoot);
 
-const RECT_NAMES = { khet: 'Khet', bigPool: 'Bara pool', smallPool: 'Chhota pool', kamra: 'Kamra', solar1: 'Solar 1', solar2: 'Solar 2' };
+const RECT_NAMES = { khet: 'Khet', bigPool: 'Bara pool', smallPool: 'Chhota pool', kamra: 'Kamra', solar1: 'Solar 1', solar2: 'Solar 2', gaadi: 'Gaadi' };
 const rects = {};
 for (const key of Object.keys(RECT_DEFAULTS)) {
   const { w, d, x, z } = RECT_DEFAULTS[key];
   const group = key === 'khet' ? makeKhet(w, d)
     : key === 'kamra' ? makeRoom(w, d)
-    : key.startsWith('solar') ? makeSolarStand()
+    : key.startsWith('solar') ? makeSolarStand(key === 'solar2')
+    : key === 'gaadi' ? makeCar(w, d)
     : makePool(w, d);
   group.name = key;
   objectsRoot.add(group);
   rects[key] = { kind: 'rect', key, w, d, x, z, group };
 }
 const rectList = Object.values(rects);
+
+// =====================================================================
+// ---------- Ground details: kacha track, water channels, grass ----------
+// =====================================================================
+// Centre line of the track: in through the gate, a rounded turn to the
+// left, along behind the room and solar stands, then a short turn into the
+// car's parking spot. Points every 0.5 m.
+function trackPath() {
+  const pts = [];
+  const ge = gateEdges();
+  const gx = (ge.left + ge.right) / 2;
+  const kamra = RECT_DEFAULTS.kamra, car = RECT_DEFAULTS.gaadi;
+  const zRun = kamra.z - kamra.d / 2 - 2.2 - TRACK_W / 2;    // 2.2 m behind the room
+  const R1 = 6, R2 = 3, step = 0.5;
+  const zArc = zRun + R1;
+  for (let z = HALF + 5; z > zArc; z -= step) pts.push([gx, z]);
+  for (let a = 0; a < Math.PI / 2; a += step / R1) pts.push([gx - R1 + R1 * Math.cos(a), zArc - R1 * Math.sin(a)]);
+  const x2 = car.x + R2;
+  for (let x = gx - R1; x > x2; x -= step) pts.push([x, zRun]);
+  for (let a = 0; a < Math.PI / 2; a += step / R2) pts.push([x2 - R2 * Math.sin(a), zRun + R2 - R2 * Math.cos(a)]);
+  for (let z = zRun + R2; z <= car.z + 0.5; z += step) pts.push([car.x, z]);
+  return pts;
+}
+const TRACK = trackPath();
+
+// A flat strip that follows a line of points (used for the track and channels).
+function stripGeometry(pts, width, tileLen, y) {
+  const pos = [], uv = [], idx = [];
+  let along = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x, z] = pts[i];
+    const [ax, az] = pts[Math.max(0, i - 1)], [bx, bz] = pts[Math.min(pts.length - 1, i + 1)];
+    let tx = bx - ax, tz = bz - az;
+    const tl = Math.hypot(tx, tz) || 1;
+    tx /= tl; tz /= tl;
+    if (i > 0) along += Math.hypot(x - pts[i - 1][0], z - pts[i - 1][1]);
+    const nx = -tz * width / 2, nz = tx * width / 2;
+    pos.push(x + nx, y, z + nz, x - nx, y, z - nz);
+    uv.push(0, along / tileLen, 1, along / tileLen);
+    if (i > 0) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  // Make every triangle face up.
+  const ix = g.index.array, p = g.attributes.position;
+  for (let t = 0; t < ix.length; t += 3) {
+    const a = ix[t], b = ix[t + 1], c = ix[t + 2];
+    const cross = (p.getX(b) - p.getX(a)) * (p.getZ(c) - p.getZ(a)) - (p.getZ(b) - p.getZ(a)) * (p.getX(c) - p.getX(a));
+    if (cross > 0) { ix[t + 1] = c; ix[t + 2] = b; }
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+// Texture across a strip: drawn pixel by pixel from a function of u (0..1
+// across) and the row, with soft see-through edges.
+function stripTexture(w, h, seed, colourAt) {
+  return canvasTexture(w, h, (ctx) => {
+    const rand = mulberry32(seed);
+    const img = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const [r, g, b, a] = colourAt(x / (w - 1), y / h, rand);
+        const k = (y * w + x) * 4;
+        img.data[k] = r; img.data[k + 1] = g; img.data[k + 2] = b; img.data[k + 3] = a;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  });
+}
+const edgeAlpha = (u, soft) => 255 * THREE.MathUtils.smoothstep(u, 0, soft) * THREE.MathUtils.smoothstep(1 - u, 0, soft);
+
+// Kacha track: pressed, paler soil, two darker wheel ruts with tyre marks,
+// a slightly higher middle with a little grass.
+function makeTrack() {
+  const tex = stripTexture(128, 256, 131, (u, v, rand) => {
+    let c = [196, 176, 138];
+    const rut = Math.min(Math.abs(u - 0.27), Math.abs(u - 0.73));
+    if (rut < 0.075) {
+      const tread = (Math.floor(v * 64) % 2) ? 0.92 : 1;
+      c = [150 * tread, 127 * tread, 96 * tread];
+    } else if (rut < 0.11) c = [170, 150, 115];
+    if (Math.abs(u - 0.5) < 0.1 && rand() < 0.08) c = [120, 130, 70];
+    const n = (rand() - 0.5) * 26;
+    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.14)];
+  });
+  const mesh = new THREE.Mesh(stripGeometry(TRACK, TRACK_W, 3, 0.012), new THREE.MeshLambertMaterial({
+    map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  }));
+  mesh.receiveShadow = true;
+  mesh.renderOrder = 1;
+  mesh.name = 'track';
+  return mesh;
+}
+
+// Water channels (naali): a main channel from the big pool along the
+// middle of the land, and a branch along every row of the baag, running
+// through the plants' basins.
+function orchardRowsZ() {
+  const z0 = AREA.minZ, z1 = AREA.maxZ;
+  const rows = Math.floor((z1 - z0) / ORCHARD_SPACING) + 1;
+  const out = [];
+  for (let r = ORCHARD_ROWS_FREE; r < rows; r++) out.push(z1 - (r * (z1 - z0)) / (rows - 1));
+  return out;
+}
+function line(x0, z0, x1, z1) {
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.5));
+  return Array.from({ length: n + 1 }, (_, i) => [x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n]);
+}
+function makeChannels() {
+  const rowsZ = orchardRowsZ();
+  const zTop = rowsZ[0] + 4;
+  const pool = RECT_DEFAULTS.bigPool;
+  const mainPts = [...line(pool.x - pool.w / 2 + 0.3, zTop, 0.4, zTop), ...line(0, zTop - 0.4, 0, AREA.minZ)];
+  const ridge = [178, 152, 112], wet = [92, 72, 52];
+  const mainTex = stripTexture(64, 64, 141, (u, v, rand) => {
+    const d = Math.abs(u - 0.5);
+    let c = d > 0.3 ? ridge : d > 0.2 ? [120, 96, 70] : [76, 104, 118];     // ridges, wet sides, water
+    if (d <= 0.2 && Math.abs(u - 0.42) < 0.03) c = [140, 168, 180];        // light on the water
+    const n = (rand() - 0.5) * 16;
+    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.2)];
+  });
+  const branchTex = stripTexture(64, 64, 151, (u, v, rand) => {
+    const d = Math.abs(u - 0.5);
+    const c = d > 0.28 ? ridge : wet;
+    const n = (rand() - 0.5) * 18;
+    return [c[0] + n, c[1] + n, c[2] + n, edgeAlpha(u, 0.22)];
+  });
+  const mat = (map) => new THREE.MeshLambertMaterial({
+    map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+  });
+  const group = new THREE.Group();
+  group.name = 'channels';
+  const main = new THREE.Mesh(stripGeometry(mainPts, 0.7, 1, 0.01), mat(mainTex));
+  const branches = new THREE.Mesh(
+    mergeGeometries(rowsZ.map((z) => stripGeometry(line(-0.3, z, AREA.minX - 0.4, z), 0.45, 1, 0.009))),
+    mat(branchTex),
+  );
+  for (const m of [main, branches]) { m.receiveShadow = true; m.renderOrder = 1; group.add(m); }
+  return { group, mainPts, rowsZ };
+}
+
+const trackMesh = makeTrack();
+const channels = makeChannels();
+scene.add(trackMesh, channels.group);
+
+// Distance from a point to the track centre line.
+function trackDist(x, z) {
+  let best = Infinity;
+  for (const [tx, tz] of TRACK) best = Math.min(best, (tx - x) ** 2 + (tz - z) ** 2);
+  return Math.sqrt(best);
+}
+// Objects may not stand on the track (the car may: it is parked at its end).
+function onTrack(item, x, z) {
+  if (item.key === 'gaadi') return false;
+  if (item.kind === 'plant') return trackDist(x, z) < TRACK_W / 2 + 0.3;
+  const hw = item.w / 2 + TRACK_W / 2, hd = item.d / 2 + TRACK_W / 2;
+  return TRACK.some(([tx, tz]) => Math.abs(tx - x) < hw && Math.abs(tz - z) < hd);
+}
+
+// ---------- Grass tufts ----------
+// Fixed spots (same every time): patches across the dry land, more along
+// the fence, the middle and edges of the track, and the channel ridges.
+// A tuft is hidden while a pool, khet, room, solar stand, car or plant
+// basin covers its spot.
+function makeGrassTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  const rand = mulberry32(171);
+  const cols = ['#6d8a3a', '#7f9a45', '#5f7a33', '#9aa453', '#b9ad6c', '#a89a5a'];
+  for (let i = 0; i < 46; i++) {
+    const x = 18 + rand() * 92, tipX = x + (rand() - 0.5) * 60, tipY = 8 + rand() * 60, wb = 2 + rand() * 2.5;
+    ctx.fillStyle = cols[(rand() * cols.length) | 0];
+    ctx.beginPath();
+    ctx.moveTo(x - wb, 128);
+    ctx.quadraticCurveTo((x + tipX) / 2, (128 + tipY) / 2 + 10, tipX, tipY);
+    ctx.quadraticCurveTo((x + tipX) / 2 + wb, (128 + tipY) / 2 + 12, x + wb, 128);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function makeTuftGeometry() {
+  // Three crossed cards, two-sided, normals up so the tuft is lit softly.
+  const pos = [], nor = [], uv = [];
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI, cx = Math.cos(a) * 0.5, cz = Math.sin(a) * 0.5;
+    const P = [[-cx, 0, -cz], [cx, 0, cz], [cx, 1, cz], [-cx, 1, -cz]];
+    const U = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    for (const tri of [[0, 1, 2], [0, 2, 3], [0, 2, 1], [0, 3, 2]]) {
+      for (const i of tri) { pos.push(...P[i]); nor.push(0, 1, 0); uv.push(...U[i]); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+const grassSpots = (() => {
+  const rand = mulberry32(909);
+  const noise = makeNoise(505);
+  const out = [];
+  const add = (x, z, big = 1) => {
+    if (Math.abs(x) > HALF - 0.4 || Math.abs(z) > HALF - 0.4 || x > HALF - WALL_THICKNESS - 0.3) return;
+    const h = (0.14 + rand() * 0.16) * big;
+    const green = rand();
+    out.push({ x, z, h, w: h * (1.1 + rand() * 0.6), rot: rand() * Math.PI,
+      tint: green < 0.6 ? [0.95 + rand() * 0.15, 1, 0.9] : [1.12, 1.04, 0.82] });
+  };
+  for (let i = 0; i < 14000 && out.length < 2200; i++) {
+    const x = (rand() * 2 - 1) * HALF, z = (rand() * 2 - 1) * HALF;
+    const edge = Math.min(HALF - Math.abs(x), HALF - Math.abs(z));
+    const patch = noise(x / 8 + 20, z / 8 + 20);
+    const p = edge < 2 ? 0.7 : patch > 0.66 ? 0.6 : patch > 0.55 ? 0.12 : 0.012;
+    if (rand() > p) continue;
+    if (trackDist(x, z) < TRACK_W / 2 + 0.2) continue;        // track gets its own tufts below
+    add(x, z);
+  }
+  TRACK.forEach(([x, z], i) => {
+    if (z > HALF - 0.5) return;
+    if (i % 2 === 0 && rand() < 0.75) add(x + (rand() - 0.5) * 0.3, z + (rand() - 0.5) * 0.3, 0.8);   // middle hump
+    for (const side of [-1, 1]) if (rand() < 0.45) {
+      const [ax, az] = TRACK[Math.max(0, i - 1)], [bx, bz] = TRACK[Math.min(TRACK.length - 1, i + 1)];
+      const l = Math.hypot(bx - ax, bz - az) || 1;
+      add(x - ((bz - az) / l) * side * (TRACK_W / 2 + 0.1), z + ((bx - ax) / l) * side * (TRACK_W / 2 + 0.1));
+    }
+  });
+  // Along the channel ridges: beside the main channel (left/right) and beside
+  // each branch (front/back).
+  const side = () => (rand() < 0.5 ? -1 : 1);
+  for (const [x, z] of channels.mainPts) if (rand() < 0.22) add(x + side() * 0.42, z, 0.8);
+  for (const z of channels.rowsZ) {
+    for (const [x] of line(-0.3, z, AREA.minX - 0.4, z)) if (rand() < 0.22) add(x, z + side() * 0.3, 0.8);
+  }
+  return out;
+})();
+const grassMesh = new THREE.InstancedMesh(makeTuftGeometry(), new THREE.MeshLambertMaterial({ map: makeGrassTexture(), alphaTest: 0.5 }), grassSpots.length);
+grassMesh.setColorAt(0, new THREE.Color(1, 1, 1));
+grassMesh.frustumCulled = false;
+grassMesh.receiveShadow = true;
+grassMesh.name = 'grass';
+scene.add(grassMesh);
+
+function updateGrass() {
+  // Plants on a 1 m grid, so each tuft only checks its neighbours.
+  const cells = new Map();
+  for (const p of plants) {
+    const k = `${Math.floor(p.x)},${Math.floor(p.z)}`;
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(p);
+  }
+  const nearPlant = (x, z) => {
+    const cx = Math.floor(x), cz = Math.floor(z);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      for (const p of cells.get(`${cx + i},${cz + j}`) || []) if ((p.x - x) ** 2 + (p.z - z) ** 2 < 0.45 * 0.45) return true;
+    }
+    return false;
+  };
+  let n = 0;
+  const c = new THREE.Color();
+  for (const s of grassSpots) {
+    if (rectList.some((r) => Math.abs(s.x - r.x) < r.w / 2 + 0.25 && Math.abs(s.z - r.z) < r.d / 2 + 0.25)) continue;
+    if (nearPlant(s.x, s.z)) continue;
+    _gq.setFromAxisAngle(_gUp, s.rot);
+    _gm.compose(_gp.set(s.x, 0, s.z), _gq, _gs.set(s.w, s.h, s.w));
+    grassMesh.setMatrixAt(n, _gm);
+    grassMesh.setColorAt(n, c.setRGB(...s.tint));
+    n++;
+  }
+  grassMesh.count = n;
+  grassMesh.instanceMatrix.needsUpdate = true;
+  grassMesh.instanceColor.needsUpdate = true;
+}
+const _gm = new THREE.Matrix4(), _gq = new THREE.Quaternion(), _gp = new THREE.Vector3(), _gs = new THREE.Vector3();
+const _gUp = new THREE.Vector3(0, 1, 0);
 
 const PLANT_BY_ID = Object.fromEntries(PLANT_TYPES.map((t) => [t.id, t]));
 let plants = [];
@@ -996,6 +1398,7 @@ function placeRect(r) {
   r.group.position.set(r.x, 0, r.z);
 }
 function sceneChanged() {
+  updateGrass();
   renderer.shadowMap.needsUpdate = true;
   requestRender();
 }
@@ -1008,6 +1411,7 @@ function rectGap(ax, az, aw, ad, b) {
 }
 // Returns null if the spot is allowed, otherwise a short reason.
 function checkSpot(item, x, z) {
+  if (onTrack(item, x, z)) return 'Kache raaste (track) par nahi rakh sakte';
   const isPlant = item.kind === 'plant';
   const hw = isPlant ? 0 : item.w / 2, hd = isPlant ? 0 : item.d / 2;
   if (x - hw < AREA.minX - EPS || x + hw > AREA.maxX + EPS ||

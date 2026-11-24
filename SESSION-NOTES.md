@@ -36,9 +36,14 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
   removed (`ORCHARD_ROWS_FREE`). Solar: 2 big panels per stand, back legs =
   room height, tilt 30 deg, facing +Z (front). Plants redone with leaf cards,
   3 designs per type, natural colours, per-plant tint/lean, thaala with
-  earth ring (suggestions 1-3 + part of 4). Grass tufts / water channels
-  (rest of 4) offered, not done. Ready-made 3D models (5) not done: model
-  sites are blocked from the container.
+  earth ring (suggestions 1-3 + part of 4). Ready-made 3D models (5): owner
+  said leave it.
+- **2026-11-24 later:** suggestion 4 done (grass tufts, water channels from
+  the big pool along every baag row). Kacha track (`TRACK`, static, from the
+  gate turning left behind the room/solar to the car; nothing may be placed
+  on it). White car `gaadi` (draggable). Solar 2 has chhappar (thatch walls)
+  on back and both sides, front open. Layout version still 3 (missing
+  `gaadi` in a save just takes its default place).
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.
