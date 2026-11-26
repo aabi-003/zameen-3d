@@ -51,6 +51,19 @@ The owner prefers explanations in simple Roman Urdu, one step at a time.
   creased normals (no brand logos). Both solar stands: chhappar on front +
   sides, back open, plastic chair each. Main channel 1.3 m wide with water,
   branches 0.3 m with a 7 cm water line.
+- **2026-11-26 menu redesign:** bottom menu = `Paudhe +` (opens panel with
+  + Cheeku / + Khajoor / + Anar), `Layout +` (panel: Replace, Qatar, Save,
+  Refresh) and Delete. Replace mode: drop an object on others and they move
+  by the same shift to its old place (`tryReplace`); same-width objects in one
+  line (pools/khet) swap order instead (`lineSwap`); moved plants may shift up
+  to 8 m, rects up to 40 m, to keep the rules, else nothing changes. Qatar
+  mode: tapping a plant selects every plant within 1 m front-to-back (a `row`
+  item: drag, replace, delete together). Save writes `zameen3d-layout-saved`;
+  Refresh goes back to it (or to the first design if never saved). Every
+  change is still auto-kept in `zameen3d-layout-v1`. The old "Reset layout"
+  (back to the first design) is now only Refresh with no save.
+- Water channels and grass are drawn for the default orchard rows; they do
+  not follow a pool that is moved into the baag.
 - The GLB loader is kept but off (`USE_GLB_MODEL = false`).
 - Shadows are drawn once (`shadowMap.autoUpdate = false`). After adding or
   moving any object, set `renderer.shadowMap.needsUpdate = true`.

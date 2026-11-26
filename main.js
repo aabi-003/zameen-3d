@@ -1605,6 +1605,10 @@ function rectGap(ax, az, aw, ad, b) {
 }
 // Returns null if the spot is allowed, otherwise a short reason.
 function checkSpot(item, x, z) {
+  if (item.kind === 'row') {                 // a whole row: every plant must be allowed where it stands now
+    for (const m of item.members) { const bad = checkSpot(m, m.x, m.z); if (bad) return bad; }
+    return null;
+  }
   if (onTrack(item, x, z)) return 'Kache raaste (track) par nahi rakh sakte';
   if (item.key === 'gaadi') { const bad = carTrackBlocked(x, z); if (bad) return bad; }
   const isPlant = item.kind === 'plant';
@@ -1639,22 +1643,26 @@ function clampToArea(item, x, z) {
 
 // ---------- Save / load (browser localStorage) ----------
 const round2 = (v) => Math.round(v * 1000) / 1000;   // millimetres
-function saveLayout() {
-  const data = {
+const SAVED_KEY = 'zameen3d-layout-saved';   // the layout the user saved with the Save button
+function layoutData() {
+  return {
     v: LAYOUT_VERSION,
     rects: Object.fromEntries(rectList.map((r) => [r.key, [round2(r.x), round2(r.z)]])),
     plants: plants.map((p) => [p.type, round2(p.x), round2(p.z), p.s]),
   };
-  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(data)); } catch { /* storage full or blocked */ }
+}
+// Every change is kept automatically (so a reload shows the same land).
+function saveLayout() {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layoutData())); } catch { /* storage full or blocked */ }
 }
 function applyDefaultLayout() {
   for (const r of rectList) { r.x = RECT_DEFAULTS[r.key].x; r.z = RECT_DEFAULTS[r.key].z; placeRect(r); }
   plants = defaultPlants();
   refreshPlants();
 }
-function loadLayout() {
+function loadLayout(key = LAYOUT_KEY) {
   let data = null;
-  try { data = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch { data = null; }
+  try { data = JSON.parse(localStorage.getItem(key) || 'null'); } catch { data = null; }
   if (!data || !(data.v >= 1 && data.v <= LAYOUT_VERSION)) { applyDefaultLayout(); return; }
 
   plants = [];
@@ -1818,9 +1826,17 @@ function rectAt(cx, cy, pad = 0) {
   if (!g) return null;
   return rectList.find((r) => Math.abs(g.x - r.x) <= r.w / 2 + pad && Math.abs(g.z - r.z) <= r.d / 2 + pad) || null;
 }
-function pickAt(cx, cy) { return plantAt(cx, cy) || rectAt(cx, cy); }
+function pickAt(cx, cy) {
+  const p = plantAt(cx, cy);
+  if (p) return rowMode ? makeRow(p) : p;
+  return rectAt(cx, cy);
+}
 function touches(item, cx, cy) {
   if (item.kind === 'plant') return plantAt(cx, cy, 46) === item;
+  if (item.kind === 'row') {
+    const p = plantAt(cx, cy, 46);
+    return !!p && item.members.includes(p);
+  }
   return rectAt(cx, cy, 1) === item;
 }
 
@@ -1834,9 +1850,37 @@ let press = null;            // finger that is down but not dragging (yet)
 let drag = null;             // object being dragged
 const fingers = new Set();
 
+// ---------- Modes (from the "Layout +" menu) ----------
+// Replace: drop an object on others and they swap places with it.
+// Row: tapping a plant picks its whole row (all plants in that line).
+let replaceMode = false;
+let rowMode = false;
+const ROW_TOLERANCE = 1.0;          // plants within 1 m front-to-back count as one row
+
+function rowBox(row) {
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const m of row.members) {
+    x0 = Math.min(x0, m.x); x1 = Math.max(x1, m.x);
+    z0 = Math.min(z0, m.z); z1 = Math.max(z1, m.z);
+  }
+  row.x = (x0 + x1) / 2; row.z = (z0 + z1) / 2;
+  row.w = x1 - x0; row.d = z1 - z0;
+}
+function makeRow(p) {
+  const members = plants.filter((q) => Math.abs(q.z - p.z) < ROW_TOLERANCE);
+  const row = { kind: 'row', members, x: 0, z: 0, w: 0, d: 0 };
+  rowBox(row);
+  return row;
+}
+function itemName(item) {
+  if (item.kind === 'plant') return PLANT_BY_ID[item.type].name;
+  if (item.kind === 'row') return `Qatar (${item.members.length} paudhe)`;
+  return RECT_NAMES[item.key];
+}
+
 function select(item) {
   selected = item;
-  delBtn.disabled = !(item && item.kind === 'plant');
+  delBtn.disabled = !(item && (item.kind === 'plant' || item.kind === 'row'));
   requestRender();
 }
 function stopCameraDrift() {
@@ -1854,10 +1898,108 @@ function startDrag(item, pointerId, cx, cy) {
   hintEl.classList.add('hidden');
   try { canvas.setPointerCapture(pointerId); } catch { /* ok */ }
 }
-function moveItem(item, x, z) {
+function setPos(item, x, z) {
+  if (item.kind === 'row') {
+    const dx = x - item.x, dz = z - item.z;
+    for (const m of item.members) { m.x += dx; m.z += dz; writePlantMatrix(m); }
+    item.x = x; item.z = z;
+    return;
+  }
   item.x = x; item.z = z;
   if (item.kind === 'plant') writePlantMatrix(item); else placeRect(item);
+}
+function moveItem(item, x, z) {
+  setPos(item, x, z);
   sceneChanged();
+}
+
+// ---------- Replace: the dragged object takes the spot, what was there goes to its old spot ----------
+const PLANT_NUDGE_MAX = 8;          // a moved plant may shift up to 8 m to find an allowed spot
+function nudgePlant(p) {
+  const cx = p.x, cz = p.z;
+  for (let r = 0.3; r <= PLANT_NUDGE_MAX; r += 0.3) {
+    const steps = Math.ceil((2 * Math.PI * r) / 0.3);
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      if (!checkSpot(p, x, z)) { p.x = x; p.z = z; writePlantMatrix(p); return true; }
+    }
+  }
+  return false;
+}
+// Things standing too close to the dragged object at its new place.
+function blockersOf(item) {
+  const moving = item.kind === 'row' ? new Set(item.members) : new Set([item]);
+  const out = new Set();
+  if (item.kind === 'rect') {
+    for (const r of rectList) if (r !== item && rectGap(item.x, item.z, item.w, item.d, r) < GAP - EPS) out.add(r);
+    for (const p of plants) if (rectGap(item.x, item.z, item.w, item.d, { x: p.x, z: p.z, w: 0, d: 0 }) < GAP - EPS) out.add(p);
+    return [...out];
+  }
+  for (const m of moving) {
+    for (const p of plants) if (!moving.has(p) && Math.hypot(p.x - m.x, p.z - m.z) < PLANT_GAP - EPS) out.add(p);
+    for (const r of rectList) if (rectGap(m.x, m.z, 0, 0, r) < GAP - EPS) out.add(r);
+  }
+  return [...out];
+}
+// Nearest allowed spot for a pool / khet / room / solar / car (up to 40 m away).
+function nudgeRect(r) {
+  const [cx, cz] = clampToArea(r, r.x, r.z);
+  for (let d = 0; d <= 40; d += 0.5) {
+    const steps = d === 0 ? 1 : Math.ceil((2 * Math.PI * d) / 0.5);
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      const [x, z] = clampToArea(r, cx + Math.cos(a) * d, cz + Math.sin(a) * d);
+      if (!checkSpot(r, x, z)) { setPos(r, x, z); return true; }
+    }
+  }
+  return false;
+}
+// Two objects in one line (same width, e.g. the pools and khet on the right):
+// they swap their order in that line, keeping the same gap between them.
+function lineSwap(a, b, fromX, fromZ) {
+  const sameCol = Math.abs(fromX - b.x) < 0.5 && Math.abs(a.w - b.w) < 0.5;
+  const sameRow = Math.abs(fromZ - b.z) < 0.5 && Math.abs(a.d - b.d) < 0.5;
+  if (sameCol) {
+    const lo = Math.min(fromZ - a.d / 2, b.z - b.d / 2), hi = Math.max(fromZ + a.d / 2, b.z + b.d / 2);
+    if (fromZ > b.z) { setPos(b, b.x, hi - b.d / 2); setPos(a, fromX, lo + a.d / 2); }
+    else { setPos(b, b.x, lo + b.d / 2); setPos(a, fromX, hi - a.d / 2); }
+    return true;
+  }
+  if (sameRow) {
+    const lo = Math.min(fromX - a.w / 2, b.x - b.w / 2), hi = Math.max(fromX + a.w / 2, b.x + b.w / 2);
+    if (fromX > b.x) { setPos(b, hi - b.w / 2, b.z); setPos(a, lo + a.w / 2, fromZ); }
+    else { setPos(b, lo + b.w / 2, b.z); setPos(a, hi - a.w / 2, fromZ); }
+    return true;
+  }
+  return false;
+}
+// Returns the number of things moved, or 0 if it could not be done (then nothing changed).
+function tryReplace(item, fromX, fromZ) {
+  const dx = fromX - item.x, dz = fromZ - item.z;
+  const dropX = item.x, dropZ = item.z;
+  const blockers = blockersOf(item);
+  if (!blockers.length) return 0;
+  const before = blockers.map((b) => [b, b.x, b.z]);
+  const undo = () => { for (const [b, x, z] of before) setPos(b, x, z); setPos(item, dropX, dropZ); };
+  if (item.kind === 'rect' && blockers.length === 1 && blockers[0].kind === 'rect' &&
+      lineSwap(item, blockers[0], fromX, fromZ)) {
+    if (!checkSpot(item, item.x, item.z) && !checkSpot(blockers[0], blockers[0].x, blockers[0].z)) return 1;
+    undo();                                // order swap did not fit: try the plain way below
+  }
+  for (const b of blockers) setPos(b, b.x + dx, b.z + dz);
+  // Pools, khet, room, solar, car keep their shift, or move to the nearest allowed spot.
+  for (const b of blockers) {
+    if (b.kind !== 'rect' || !checkSpot(b, b.x, b.z)) continue;
+    if (!nudgeRect(b)) { undo(); return 0; }
+  }
+  // Plants may shift a little to keep the 5 ft / 10 ft rules.
+  for (const b of blockers) {
+    if (b.kind === 'plant' && checkSpot(b, b.x, b.z) && !nudgePlant(b)) { undo(); return 0; }
+  }
+  if (checkSpot(item, item.x, item.z)) { undo(); return 0; }
+  for (const b of blockers) if (checkSpot(b, b.x, b.z)) { undo(); return 0; }
+  return blockers.length;
 }
 function dragMove(cx, cy) {
   const g = groundAt(cx, cy);
@@ -1865,6 +2007,13 @@ function dragMove(cx, cy) {
   const [x, z] = clampToArea(drag.item, g.x + drag.offX, g.z + drag.offZ);
   moveItem(drag.item, x, z);
   const bad = checkSpot(drag.item, x, z);
+  if (replaceMode) {                       // a clash is fine here: chhorne par jagah badal jayegi
+    if (bad && !drag.bad) showStatus('Chhoro to yahan wali cheezen purani jagah chali jayengi');
+    if (!bad && drag.bad) statusEl.classList.add('hidden');
+    drag.bad = bad;
+    hideCross();
+    return;
+  }
   if (bad && !drag.bad) { beep(); showStatus(bad); }
   if (!bad && drag.bad) statusEl.classList.add('hidden');
   drag.bad = bad;
@@ -1875,11 +2024,21 @@ function endDrag() {
   drag = null;
   controls.enabled = true;
   stopCameraDrift();
+  if (bad && replaceMode) {
+    const n = tryReplace(item, fromX, fromZ);
+    if (n) {
+      hideCross();
+      sceneChanged();
+      saveLayout();
+      showStatus(`Jagah badal di — ${n === 1 ? '1 cheez' : n + ' cheezen'} ${itemName(item)} ki purani jagah par`, 2600);
+      return;
+    }
+  }
   if (bad) {
     showCross(item.x, item.z);             // the cross stays where it was refused
     hideCross(900);
     beep(440, 220);
-    showStatus(bad + ' — wapas rakh diya', 2200);
+    showStatus((replaceMode ? 'Yahan jagah nahi badal sakti — ' : '') + bad + ' — wapas rakh diya', 2600);
     moveItem(item, fromX, fromZ);
   } else {
     hideCross();
@@ -1947,9 +2106,7 @@ function pointerEnd(e) {
       select(item);
       if (item) {
         hintEl.classList.add('hidden');
-        showStatus(item.kind === 'plant'
-          ? `${PLANT_BY_ID[item.type].name} chuna — ungli rakh kar khiskao`
-          : `${RECT_NAMES[item.key]} chuna — ungli rakh kar khiskao`, 2200);
+        showStatus(`${itemName(item)} chuna — ungli rakh kar khiskao`, 2200);
       }
     }
   }
@@ -1958,16 +2115,69 @@ window.addEventListener('pointerup', pointerEnd, true);
 window.addEventListener('pointercancel', pointerEnd, true);
 
 // ---------- Bottom menu ----------
-const addBox = document.getElementById('adds');
+// Two parent buttons ("Paudhe +", "Layout +") open a small panel above the
+// menu with their buttons. Delete stays outside.
 const delBtn = document.getElementById('del');
+const panels = { plants: document.getElementById('panel-plants'), layout: document.getElementById('panel-layout') };
+const parents = { plants: document.getElementById('btn-plants'), layout: document.getElementById('btn-layout') };
+let openPanel = null;
+function showPanel(name) {
+  openPanel = openPanel === name ? null : name;
+  if (openPanel) hintEl.classList.add('hidden');
+  for (const k of Object.keys(panels)) {
+    panels[k].hidden = openPanel !== k;
+    parents[k].classList.toggle('open', openPanel === k);
+    parents[k].setAttribute('aria-expanded', String(openPanel === k));
+  }
+}
+for (const k of Object.keys(parents)) parents[k].addEventListener('click', () => showPanel(k));
+canvas.addEventListener('pointerdown', () => { if (openPanel) showPanel(openPanel); });
+
 for (const t of PLANT_TYPES) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'tool';
   b.innerHTML = `<span class="dot" style="background:#${t.leaf.toString(16).padStart(6, '0')}"></span><span>+ ${t.name}</span>`;
   b.addEventListener('click', () => addPlant(t.id));
-  addBox.appendChild(b);
+  panels.plants.appendChild(b);
 }
+
+const replaceBtn = document.getElementById('mode-replace');
+const rowBtn = document.getElementById('mode-row');
+const modeLabel = document.getElementById('mode-label');
+function updateModes() {
+  replaceBtn.classList.toggle('on', replaceMode);
+  rowBtn.classList.toggle('on', rowMode);
+  replaceBtn.setAttribute('aria-pressed', String(replaceMode));
+  rowBtn.setAttribute('aria-pressed', String(rowMode));
+  const on = [replaceMode && 'Replace', rowMode && 'Qatar'].filter(Boolean);
+  modeLabel.textContent = on.length ? on.join(' + ') + ' ON' : '';
+  parents.layout.classList.toggle('active', on.length > 0);
+}
+replaceBtn.addEventListener('click', () => {
+  replaceMode = !replaceMode;
+  updateModes();
+  showStatus(replaceMode
+    ? 'Replace ON: cheez ko doosri cheez par chhoro, wo uski purani jagah chali jayegi'
+    : 'Replace OFF', 2800);
+});
+rowBtn.addEventListener('click', () => {
+  rowMode = !rowMode;
+  select(null);
+  updateModes();
+  showStatus(rowMode
+    ? 'Qatar ON: paudhe par tap karo, poori qatar chuni jayegi'
+    : 'Qatar OFF: ek paudha chuna jayega', 2800);
+});
+document.getElementById('save-layout').addEventListener('click', () => {
+  try {
+    localStorage.setItem(SAVED_KEY, JSON.stringify(layoutData()));
+    showStatus('Layout save ho gaya', 1800);
+  } catch {
+    beep();
+    showStatus('Save nahi hua (phone ki storage band hai)', 2600);
+  }
+});
 
 function addPlant(typeId) {
   unlockAudio();
@@ -1995,26 +2205,35 @@ function addPlant(typeId) {
 }
 
 delBtn.addEventListener('click', () => {
-  if (!selected || selected.kind !== 'plant') return;
-  plants = plants.filter((p) => p !== selected);
+  if (!selected || (selected.kind !== 'plant' && selected.kind !== 'row')) return;
+  const gone = new Set(selected.kind === 'row' ? selected.members : [selected]);
+  if (gone.size > 1 && !window.confirm(`Poori qatar (${gone.size} paudhe) hata dein?`)) return;
+  plants = plants.filter((p) => !gone.has(p));
   refreshPlants();
   select(null);
   saveLayout();
-  showStatus('Paudha hata diya', 1600);
+  showStatus(gone.size > 1 ? `Qatar hata di (${gone.size} paudhe)` : 'Paudha hata diya', 1600);
 });
 
+// Refresh: go back to the layout from the last Save (or the first design if nothing was saved yet).
 document.getElementById('reset-layout').addEventListener('click', () => {
-  if (!window.confirm('Poora layout pehle jaisa kar dein? (Aap ki tabdeeliyan mit jayengi)')) return;
-  applyDefaultLayout();
+  let hasSave = false;
+  try { hasSave = !!localStorage.getItem(SAVED_KEY); } catch { hasSave = false; }
+  const msg = hasSave
+    ? 'Aakhri save wala layout wapas le aayein? (Save ke baad ki tabdeeliyan mit jayengi)'
+    : 'Abhi tak koi save nahi hai. Pehla design wapas le aayein?';
+  if (!window.confirm(msg)) return;
+  if (hasSave) loadLayout(SAVED_KEY); else applyDefaultLayout();
   select(null);
   saveLayout();
-  showStatus('Layout pehle jaisa ho gaya', 1800);
+  showStatus(hasSave ? 'Aakhri save wala layout aa gaya' : 'Pehla design aa gaya', 1800);
 });
 
 loadLayout();
 select(null);
+updateModes();
 // Test hook (harmless): lets automated checks read the layout.
-window.__zameen = { camera, controls, plants: () => plants, rects, requestRender };
+window.__zameen = { camera, controls, plants: () => plants, rects, requestRender, tryReplace, makeRow, checkSpot, moveItem };
 
 // ---------- UI ----------
 controls.addEventListener('start', () => hintEl.classList.add('hidden'), { once: true });

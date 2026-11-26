@@ -33,15 +33,40 @@
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
   </button>
 
-  <nav id="menu" aria-label="Objects">
-    <div id="adds"></div>
-    <button id="del" class="tool" type="button" disabled>
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
-      <span>Delete</span>
+  <!-- Panels that open above the menu -->
+  <div id="panel-plants" class="panel" hidden aria-label="Paudhe"></div>
+  <div id="panel-layout" class="panel" hidden aria-label="Layout">
+    <button id="mode-replace" class="tool mode" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>
+      <span>Replace</span>
+    </button>
+    <button id="mode-row" class="tool mode" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/><path d="M2 17h20" stroke-dasharray="2 2"/></svg>
+      <span>Qatar</span>
+    </button>
+    <button id="save-layout" class="tool" type="button">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/></svg>
+      <span>Save</span>
     </button>
     <button id="reset-layout" class="tool" type="button">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-      <span>Reset layout</span>
+      <span>Refresh</span>
+    </button>
+  </div>
+
+  <nav id="menu" aria-label="Objects">
+    <button id="btn-plants" class="tool parent" type="button" aria-expanded="false" aria-controls="panel-plants">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-9M12 12c0-4 3-7 7-7 0 4-3 7-7 7zM12 14c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z"/></svg>
+      <span>Paudhe +</span>
+    </button>
+    <button id="btn-layout" class="tool parent" type="button" aria-expanded="false" aria-controls="panel-layout">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v7M14 17.5h7"/></svg>
+      <span>Layout +</span>
+      <small id="mode-label"></small>
+    </button>
+    <button id="del" class="tool" type="button" disabled>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      <span>Delete</span>
     </button>
   </nav>
 
